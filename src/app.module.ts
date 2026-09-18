@@ -1,17 +1,18 @@
 import { Module } from '@nestjs/common';
-import { APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
+import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { MongooseModule } from '@nestjs/mongoose';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
-import { AppController } from './app.controller.js';
-import { AppService } from './app.service.js';
 import {
   DatabaseConfig,
   EnvironmentVariables,
+  ThrottleConfig,
   validateEnv,
 } from './_utils/config/env.config.js';
 import { AuthModule } from './auth/auth.module.js';
-import { MongooseModule } from '@nestjs/mongoose';
 import { UsersModule } from './users/users.module.js';
+import { HealthModule } from './health/health.module.js';
 
 @Module({
   imports: [
@@ -28,14 +29,22 @@ import { UsersModule } from './users/users.module.js';
         dbName: config.get<DatabaseConfig>('DATABASE').DATABASE_NAME,
       }),
     }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<EnvironmentVariables, true>) => {
+        const { TTL, LIMIT } = config.get<ThrottleConfig>('THROTTLE');
+        return [{ ttl: TTL, limit: LIMIT }];
+      },
+    }),
+    HealthModule,
     AuthModule,
     UsersModule,
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
     { provide: APP_PIPE, useClass: ZodValidationPipe },
     { provide: APP_INTERCEPTOR, useClass: ZodSerializerInterceptor },
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
   ],
 })
 export class AppModule {}

@@ -6,15 +6,20 @@ tasks:
     cmds:
       - nest start --watch
 
-  test:
-    desc: Run the tests
-    cmds:
-      - nest test
-
   lint:
     desc: Run the linter
     cmds:
-      - nest lint
+      - pnpm lint
+
+  format:
+    desc: Format the sources
+    cmds:
+      - pnpm format
+
+  seed:
+    desc: Drop the database and insert the seed data
+    cmds:
+      - pnpm seed
 
   build:
     desc: Build the application

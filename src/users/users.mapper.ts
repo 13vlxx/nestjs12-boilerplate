@@ -11,5 +11,9 @@ export class UsersMapper {
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
+    role: user.role,
   });
+
+  toGetUserDtos = (users: UserDocument[]): GetUserDto[] =>
+    users.map(this.toGetUserDto);
 }
