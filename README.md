@@ -23,11 +23,21 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 
 ```bash
 pnpm install
-pnpm seed        # drops the DB and inserts the users from src/seed/seed.data.ts
-pnpm start:dev   # http://localhost:3000/api/v1 — Swagger at /api/doc
+docker compose up -d --wait   # MongoDB, Maildev, RustFS (see below)
+pnpm seed                     # drops the DB and inserts the users from src/seed/seed.data.ts
+pnpm start:dev                # http://localhost:3000/api/v1 — Swagger at /api/doc
 ```
 
-Requires a MongoDB reachable at `DATABASE_URL` (default `mongodb://localhost:27017/`).
+### Local services (`docker-compose.yml`)
+
+| Service | Image                | Ports                                | Notes                                         |
+| ------- | -------------------- | ------------------------------------ | --------------------------------------------- |
+| MongoDB | `mongo:8.3`          | `27017`                              |                                               |
+| Maildev | `maildev/maildev`    | `1025` SMTP, `1080` inbox UI         | Catches every email sent by the API           |
+| RustFS  | `rustfs/rustfs`      | `9000` S3 API, `9001` console        | S3-compatible storage, `rustfsadmin` / `rustfsadmin` |
+
+Data lives in named volumes; `docker compose down -v` (or `task reset`) wipes it.
+The API itself runs on the host.
 
 Seeded accounts:
 
@@ -40,6 +50,8 @@ Seeded accounts:
 
 | Command           | Description                                            |
 | ----------------- | ------------------------------------------------------ |
+| `task up`         | Start MongoDB, Maildev and RustFS in Docker            |
+| `task down`       | Stop them (`task reset` also deletes their data)       |
 | `pnpm start:dev`  | Start with file watching                               |
 | `pnpm build`      | Compile to `dist/`                                     |
 | `pnpm start:prod` | Run the compiled app                                   |

@@ -1,6 +1,21 @@
 # https://taskfile.dev
 version: '3'
 tasks:
+  up:
+    desc: Start the local dependencies (MongoDB, Maildev, RustFS)
+    cmds:
+      - docker compose up -d --wait
+
+  down:
+    desc: Stop the local dependencies
+    cmds:
+      - docker compose down
+
+  reset:
+    desc: Stop the local dependencies and delete their data
+    cmds:
+      - docker compose down -v
+
   dev:
     desc: Start the application in development mode
     cmds:

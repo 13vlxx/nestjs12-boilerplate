@@ -1,0 +1,57 @@
+# Local development dependencies. The API itself runs on the host (pnpm start:dev).
+#
+#   docker compose up -d
+#
+# MongoDB   → mongodb://localhost:27017
+# Maildev   → SMTP localhost:1025, inbox UI http://localhost:1080
+# RustFS    → S3 API http://localhost:9000, console http://localhost:9001 (rustfsadmin / rustfsadmin)
+
+name: nestjs12-boilerplate
+
+services:
+  mongodb:
+    image: mongo:8.3
+    ports:
+      - '27018:27017'
+    volumes:
+      - mongodb-data:/data/db
+    healthcheck:
+      test:
+        ['CMD', 'mongosh', '--quiet', '--eval', "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  maildev:
+    image: maildev/maildev:2.2.1
+    ports:
+      - '1025:1025' # SMTP
+      - '1080:1080' # Web UI
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:1080/healthz']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  rustfs:
+    image: rustfs/rustfs:1.0.0
+    ports:
+      - '9000:9000' # S3 API
+      - '9001:9001' # Console
+    environment:
+      RUSTFS_ACCESS_KEY: rustfsadmin
+      RUSTFS_SECRET_KEY: rustfsadmin
+      RUSTFS_CONSOLE_ENABLE: 'true'
+    volumes:
+      - rustfs-data:/data
+    healthcheck:
+      test: ['CMD', 'curl', '-sf', 'http://localhost:9000/health']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+volumes:
+  mongodb-data:
+  rustfs-data:
