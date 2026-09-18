@@ -37,6 +37,7 @@ export class UsersService {
       email: dto.email,
       password: await this.encryptionService.encrypt(dto.password),
       role,
+      hashedRefreshToken: null,
     });
   }
 
@@ -48,6 +49,12 @@ export class UsersService {
 
   findByEmailOrNull = (email: string): Promise<UserDocument | null> =>
     this.repository.findByEmailOrNull(email);
+
+  updateHashedRefreshToken = (
+    user: UserDocument,
+    hashedRefreshToken: string | null,
+  ): Promise<UserDocument> =>
+    this.repository.updateHashedRefreshToken(user, hashedRefreshToken);
 
   async updatePassword(
     user: UserDocument,

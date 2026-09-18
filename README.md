@@ -12,7 +12,7 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 | Framework         | NestJS 12 + Express                                                    |
 | Database          | MongoDB via `@nestjs/mongoose` / Mongoose 9                            |
 | Validation        | Zod 4 + `nestjs-zod` — DTOs, env vars and responses share one schema   |
-| Auth              | `@nestjs/passport` + `passport-jwt`, Bearer token (no cookies)         |
+| Auth              | `@nestjs/passport` + `passport-jwt`, access + refresh tokens as Bearer |
 | Password hashing  | bcrypt behind an upgradable `EncryptionService`                        |
 | Rate limiting     | `@nestjs/throttler`                                                    |
 | Health            | `@nestjs/terminus` (MongoDB ping)                                      |
@@ -64,7 +64,9 @@ refuses to boot with a clear error if anything is missing or malformed.
 | `DATABASE_URL`                | —       | MongoDB connection string                              |
 | `DATABASE_NAME`               | —       |                                                        |
 | `JWT_ACCESS_TOKEN_SECRET`     | —       | At least 32 characters                                 |
-| `JWT_ACCESS_TOKEN_EXPIRATION` | `3600`  | Seconds                                                |
+| `JWT_ACCESS_TOKEN_EXPIRATION` | `900`   | Seconds. Short: an access token cannot be revoked      |
+| `JWT_REFRESH_TOKEN_SECRET`    | —       | At least 32 characters, different from the access one  |
+| `JWT_REFRESH_TOKEN_EXPIRATION`| `604800`| Seconds (7 days)                                       |
 | `THROTTLE_TTL`                | `60000` | Rate-limit window, milliseconds                        |
 | `THROTTLE_LIMIT`              | `100`   | Max requests per window per IP                         |
 
@@ -126,7 +128,18 @@ export class CreateUserDto extends createZodDto(createUserSchema) {}
 ## Authentication & authorization
 
 - `POST /auth/register` and `POST /auth/login` return
-  `{ accessToken, user }`. Send the token as `Authorization: Bearer <token>`.
+  `{ accessToken, refreshToken, user }`.
+- Send the **access token** as `Authorization: Bearer <accessToken>` on every
+  request. It is short-lived (15 min by default) and cannot be revoked.
+- When it expires, call `POST /auth/refresh` with the **refresh token** as
+  Bearer: you get a fresh pair. Refresh tokens are rotated on every call, and
+  only the latest one is valid (its SHA-256 is stored on the user).
+  Presenting an already-rotated refresh token is treated as a theft: the whole
+  session is revoked and the user must log in again.
+- `POST /auth/logout` (access token) revokes the refresh token.
+- Single device: logging in from another device replaces the previous refresh
+  token. Switch `hashedRefreshToken` for a `sessions` collection if you need
+  concurrent devices.
 - **Every route is protected by default** (`JwtAuthGuard` registered as
   `APP_GUARD`). Opt out with `@Public()` on a route or a whole controller.
 - Restrict a route to one or more roles with `@Protect(UserRoleEnum.ADMIN)`.
@@ -183,6 +196,7 @@ orchestrators.
 | Invalid payload              | 400    | `{ message: "Validation failed", errors: [...] }`     |
 | Missing / invalid token      | 401    | `{ message: "Unauthorized" }`                         |
 | Wrong credentials            | 401    | `{ message: "WRONG_CREDENTIALS" }`                    |
+| Refresh token invalid/rotated| 401    | `{ message: "INVALID_REFRESH_TOKEN" }`                |
 | Insufficient role            | 403    | `{ message: "INSUFFICIENT_ROLE" }`                    |
 | Email already registered     | 409    | `{ message: "EMAIL_ALREADY_USED" }`                   |
 | Duplicate key at DB level    | 409    | `{ message: "DUPLICATE_KEY" }`                        |

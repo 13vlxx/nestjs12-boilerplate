@@ -31,6 +31,10 @@ export class User {
     default: UserRoleEnum.USER,
   })
   role: UserRoleEnum;
+
+  /** Hash of the current refresh token (single device). null = logged out. */
+  @Prop({ type: String, default: null })
+  hashedRefreshToken: string | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

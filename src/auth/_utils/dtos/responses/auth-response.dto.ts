@@ -4,6 +4,7 @@ import { getUserSchema } from '../../../../users/_utils/dtos/responses/get-user.
 
 export const authResponseSchema = z.strictObject({
   accessToken: z.string(),
+  refreshToken: z.string(),
   user: getUserSchema,
 });
 

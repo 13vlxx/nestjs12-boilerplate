@@ -8,5 +8,8 @@ import {
 export class AuthExceptions {
   readonly WRONG_CREDENTIALS = new UnauthorizedException('WRONG_CREDENTIALS');
   readonly INVALID_TOKEN = new UnauthorizedException('INVALID_TOKEN');
+  readonly INVALID_REFRESH_TOKEN = new UnauthorizedException(
+    'INVALID_REFRESH_TOKEN',
+  );
   readonly INSUFFICIENT_ROLE = new ForbiddenException('INSUFFICIENT_ROLE');
 }

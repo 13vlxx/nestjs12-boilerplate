@@ -11,6 +11,7 @@ import { AuthService } from './auth.service.js';
 import { AuthController } from './auth.controller.js';
 import { AuthExceptions } from './_utils/errors/auth-exceptions.types.js';
 import { JWT_STRATEGY_NAME, JwtStrategy } from './strategies/jwt.strategy.js';
+import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { UsersModule } from '../users/users.module.js';
 import { EncryptionModule } from '../encryption/encryption.module.js';
@@ -42,6 +43,7 @@ import { EncryptionModule } from '../encryption/encryption.module.js';
     AuthService,
     AuthExceptions,
     JwtStrategy,
+    JwtRefreshStrategy,
     { provide: APP_GUARD, useClass: JwtAuthGuard },
   ],
   exports: [AuthService, PassportModule],

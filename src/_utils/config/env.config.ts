@@ -22,10 +22,21 @@ const databaseConfigSchema = z.object({
   DATABASE_NAME: z.string(),
 });
 
-const jwtConfigSchema = z.object({
-  ACCESS_TOKEN_SECRET: z.string().min(32),
-  ACCESS_TOKEN_EXPIRATION: z.coerce.number().int().positive().default(3600),
-});
+const jwtConfigSchema = z
+  .object({
+    ACCESS_TOKEN_SECRET: z.string().min(32),
+    ACCESS_TOKEN_EXPIRATION: z.coerce.number().int().positive().default(900),
+    REFRESH_TOKEN_SECRET: z.string().min(32),
+    REFRESH_TOKEN_EXPIRATION: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(7 * 24 * 3600),
+  })
+  .refine((jwt) => jwt.ACCESS_TOKEN_SECRET !== jwt.REFRESH_TOKEN_SECRET, {
+    message: 'ACCESS_TOKEN_SECRET and REFRESH_TOKEN_SECRET must differ',
+    path: ['REFRESH_TOKEN_SECRET'],
+  });
 
 const throttleConfigSchema = z.object({
   TTL: z.coerce.number().int().positive().default(60_000),
@@ -62,6 +73,8 @@ export function validateEnv(
     JWT: {
       ACCESS_TOKEN_SECRET: config.JWT_ACCESS_TOKEN_SECRET,
       ACCESS_TOKEN_EXPIRATION: config.JWT_ACCESS_TOKEN_EXPIRATION,
+      REFRESH_TOKEN_SECRET: config.JWT_REFRESH_TOKEN_SECRET,
+      REFRESH_TOKEN_EXPIRATION: config.JWT_REFRESH_TOKEN_EXPIRATION,
     },
     THROTTLE: {
       TTL: config.THROTTLE_TTL,

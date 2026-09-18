@@ -24,6 +24,14 @@ export class UsersRepository {
   findByEmailOrNull = (email: string): Promise<UserDocument | null> =>
     this.userModel.findOne({ email }).exec();
 
+  updateHashedRefreshToken = (
+    user: UserDocument,
+    hashedRefreshToken: string | null,
+  ): Promise<UserDocument> => {
+    user.hashedRefreshToken = hashedRefreshToken;
+    return user.save();
+  };
+
   updatePassword = (
     user: UserDocument,
     hashedPassword: string,
