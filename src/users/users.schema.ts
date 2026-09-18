@@ -4,6 +4,17 @@ import { UserRoleEnum } from './_utils/types/user-role.enum.js';
 
 export type UserDocument = HydratedDocument<User>;
 
+@Schema({ _id: false })
+export class ActionToken {
+  @Prop({ type: String, required: true })
+  hash: string;
+
+  @Prop({ type: Date, required: true })
+  expiresAt: Date;
+}
+
+const ActionTokenSchema = SchemaFactory.createForClass(ActionToken);
+
 @Schema({ timestamps: true })
 export class User {
   @Prop({ type: String, required: true })
@@ -21,6 +32,9 @@ export class User {
   })
   email: string;
 
+  @Prop({ type: Boolean, required: true, default: false })
+  isEmailVerified: boolean;
+
   @Prop({ type: String, required: true })
   password: string;
 
@@ -32,9 +46,16 @@ export class User {
   })
   role: UserRoleEnum;
 
-  /** Hash of the current refresh token (single device). null = logged out. */
   @Prop({ type: String, default: null })
   hashedRefreshToken: string | null;
+
+  @Prop({ type: ActionTokenSchema, default: null })
+  emailVerificationToken: ActionToken | null;
+
+  @Prop({ type: ActionTokenSchema, default: null })
+  passwordResetToken: ActionToken | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);
+UserSchema.index({ 'emailVerificationToken.hash': 1 }, { sparse: true });
+UserSchema.index({ 'passwordResetToken.hash': 1 }, { sparse: true });

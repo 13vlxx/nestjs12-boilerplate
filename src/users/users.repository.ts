@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { User, UserDocument } from './users.schema.js';
+import { ActionToken, User, UserDocument } from './users.schema.js';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
 import { UsersExceptions } from './_utils/errors/users-exceptions.types.js';
@@ -24,6 +24,16 @@ export class UsersRepository {
   findByEmailOrNull = (email: string): Promise<UserDocument | null> =>
     this.userModel.findOne({ email }).exec();
 
+  findByEmailVerificationTokenHashOrNull = (
+    hash: string,
+  ): Promise<UserDocument | null> =>
+    this.userModel.findOne({ 'emailVerificationToken.hash': hash }).exec();
+
+  findByPasswordResetTokenHashOrNull = (
+    hash: string,
+  ): Promise<UserDocument | null> =>
+    this.userModel.findOne({ 'passwordResetToken.hash': hash }).exec();
+
   updateHashedRefreshToken = (
     user: UserDocument,
     hashedRefreshToken: string | null,
@@ -37,6 +47,28 @@ export class UsersRepository {
     hashedPassword: string,
   ): Promise<UserDocument> => {
     user.password = hashedPassword;
+    return user.save();
+  };
+
+  updateEmailVerificationToken = (
+    user: UserDocument,
+    token: ActionToken | null,
+  ): Promise<UserDocument> => {
+    user.emailVerificationToken = token;
+    return user.save();
+  };
+
+  updatePasswordResetToken = (
+    user: UserDocument,
+    token: ActionToken | null,
+  ): Promise<UserDocument> => {
+    user.passwordResetToken = token;
+    return user.save();
+  };
+
+  markEmailVerified = (user: UserDocument): Promise<UserDocument> => {
+    user.isEmailVerified = true;
+    user.emailVerificationToken = null;
     return user.save();
   };
 }

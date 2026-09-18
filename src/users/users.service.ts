@@ -5,7 +5,7 @@ import { UsersExceptions } from './_utils/errors/users-exceptions.types.js';
 import { EncryptionService } from '../encryption/encryption.service.js';
 import { CreateUserDto } from './_utils/dtos/requests/create-user.dto.js';
 import { GetUserDto } from './_utils/dtos/responses/get-user.dto.js';
-import { UserDocument } from './users.schema.js';
+import { ActionToken, UserDocument } from './users.schema.js';
 import { UserRoleEnum } from './_utils/types/user-role.enum.js';
 
 @Injectable()
@@ -27,6 +27,7 @@ export class UsersService {
   async create(
     dto: CreateUserDto,
     role: UserRoleEnum = UserRoleEnum.USER,
+    isEmailVerified = false,
   ): Promise<UserDocument> {
     const existing = await this.repository.findByEmailOrNull(dto.email);
     if (existing) throw this.exceptions.EMAIL_ALREADY_USED;
@@ -35,9 +36,12 @@ export class UsersService {
       firstName: dto.firstName,
       lastName: dto.lastName,
       email: dto.email,
+      isEmailVerified,
       password: await this.encryptionService.encrypt(dto.password),
       role,
       hashedRefreshToken: null,
+      emailVerificationToken: null,
+      passwordResetToken: null,
     });
   }
 
@@ -50,11 +54,36 @@ export class UsersService {
   findByEmailOrNull = (email: string): Promise<UserDocument | null> =>
     this.repository.findByEmailOrNull(email);
 
+  findByEmailVerificationTokenHashOrNull = (
+    hash: string,
+  ): Promise<UserDocument | null> =>
+    this.repository.findByEmailVerificationTokenHashOrNull(hash);
+
+  findByPasswordResetTokenHashOrNull = (
+    hash: string,
+  ): Promise<UserDocument | null> =>
+    this.repository.findByPasswordResetTokenHashOrNull(hash);
+
   updateHashedRefreshToken = (
     user: UserDocument,
     hashedRefreshToken: string | null,
   ): Promise<UserDocument> =>
     this.repository.updateHashedRefreshToken(user, hashedRefreshToken);
+
+  updateEmailVerificationToken = (
+    user: UserDocument,
+    token: ActionToken | null,
+  ): Promise<UserDocument> =>
+    this.repository.updateEmailVerificationToken(user, token);
+
+  updatePasswordResetToken = (
+    user: UserDocument,
+    token: ActionToken | null,
+  ): Promise<UserDocument> =>
+    this.repository.updatePasswordResetToken(user, token);
+
+  markEmailVerified = (user: UserDocument): Promise<UserDocument> =>
+    this.repository.markEmailVerified(user);
 
   async updatePassword(
     user: UserDocument,

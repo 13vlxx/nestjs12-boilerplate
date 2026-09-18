@@ -1,10 +1,10 @@
-import { createHash, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 
-/**
- * Refresh tokens are long, high-entropy strings, so a plain SHA-256 is enough
- * to store them safely. Do NOT use bcrypt here: it silently truncates its
- * input to 72 bytes, and two JWTs for the same user share far more than that.
- */
+export const generateToken = (): string =>
+  randomBytes(32).toString('base64url');
+
+// Tokens are long, high-entropy strings: SHA-256 is enough and, unlike bcrypt,
+// does not truncate its input to 72 bytes (two JWTs share a longer prefix).
 export const hashToken = (token: string): string =>
   createHash('sha256').update(token).digest('hex');
 

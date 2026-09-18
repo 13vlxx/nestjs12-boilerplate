@@ -1,4 +1,6 @@
 import {
+  BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   UnauthorizedException,
@@ -12,4 +14,11 @@ export class AuthExceptions {
     'INVALID_REFRESH_TOKEN',
   );
   readonly INSUFFICIENT_ROLE = new ForbiddenException('INSUFFICIENT_ROLE');
+  readonly INVALID_VERIFICATION_TOKEN = new BadRequestException(
+    'INVALID_VERIFICATION_TOKEN',
+  );
+  readonly INVALID_RESET_TOKEN = new BadRequestException('INVALID_RESET_TOKEN');
+  readonly EMAIL_ALREADY_VERIFIED = new ConflictException(
+    'EMAIL_ALREADY_VERIFIED',
+  );
 }

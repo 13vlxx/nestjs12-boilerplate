@@ -15,6 +15,7 @@ import { JwtRefreshStrategy } from './strategies/jwt-refresh.strategy.js';
 import { JwtAuthGuard } from './guards/jwt-auth.guard.js';
 import { UsersModule } from '../users/users.module.js';
 import { EncryptionModule } from '../encryption/encryption.module.js';
+import { EmailsModule } from '../emails/emails.module.js';
 
 @Global()
 @Module({
@@ -36,6 +37,7 @@ import { EncryptionModule } from '../encryption/encryption.module.js';
     }),
     UsersModule,
     EncryptionModule,
+    EmailsModule,
     DiscoveryModule,
   ],
   controllers: [AuthController],

@@ -44,7 +44,7 @@ async function seed() {
     );
 
     for (const { dto, role } of seedUsers) {
-      await usersService.create(dto, role);
+      await usersService.create(dto, role, true);
       logger.log(`Created ${role} ${dto.email}`);
     }
 

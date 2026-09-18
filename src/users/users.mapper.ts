@@ -11,6 +11,7 @@ export class UsersMapper {
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
+    isEmailVerified: user.isEmailVerified,
     role: user.role,
   });
 

@@ -7,6 +7,7 @@ export const getUserSchema = z.strictObject({
   firstName: z.string(),
   lastName: z.string(),
   email: z.string(),
+  isEmailVerified: z.boolean(),
   role: z.enum(UserRoleEnum),
 });
 

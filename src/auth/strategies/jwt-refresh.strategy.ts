@@ -11,7 +11,7 @@ import { jwtPayloadSchema } from '../_utils/types/jwt-payload.type.js';
 import { AuthExceptions } from '../_utils/errors/auth-exceptions.types.js';
 import { UsersService } from '../../users/users.service.js';
 import { UserDocument } from '../../users/users.schema.js';
-import { tokenMatchesHash } from '../_utils/hash-token.js';
+import { tokenMatchesHash } from '../_utils/token.utils.js';
 
 export const JWT_REFRESH_STRATEGY_NAME = 'jwt-refresh';
 

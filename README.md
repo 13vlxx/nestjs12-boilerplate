@@ -14,6 +14,7 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 | Validation        | Zod 4 + `nestjs-zod` — DTOs, env vars and responses share one schema   |
 | Auth              | `@nestjs/passport` + `passport-jwt`, access + refresh tokens as Bearer |
 | Password hashing  | bcrypt behind an upgradable `EncryptionService`                        |
+| Emails            | nodemailer + React Email templates (Maildev locally)                   |
 | Rate limiting     | `@nestjs/throttler`                                                    |
 | Health            | `@nestjs/terminus` (MongoDB ping)                                      |
 | Docs              | Swagger UI at `/api/doc` (disabled in production)                      |
@@ -73,6 +74,7 @@ refuses to boot with a clear error if anything is missing or malformed.
 | `PORT`                        | `3000`  |                                                        |
 | `NODE_ENV`                    | —       | `development` \| `staging` \| `production`             |
 | `CORS_ORIGINS`                | `""`    | Comma-separated allowed origins. Empty = CORS disabled |
+| `CLIENT_URL`                  | —       | Front-end base URL, used to build links in emails      |
 | `DATABASE_URL`                | —       | MongoDB connection string                              |
 | `DATABASE_NAME`               | —       |                                                        |
 | `JWT_ACCESS_TOKEN_SECRET`     | —       | At least 32 characters                                 |
@@ -81,6 +83,10 @@ refuses to boot with a clear error if anything is missing or malformed.
 | `JWT_REFRESH_TOKEN_EXPIRATION`| `604800`| Seconds (7 days)                                       |
 | `THROTTLE_TTL`                | `60000` | Rate-limit window, milliseconds                        |
 | `THROTTLE_LIMIT`              | `100`   | Max requests per window per IP                         |
+| `MAIL_HOST` / `MAIL_PORT`     | —       | SMTP server (Maildev: `localhost` / `1025`)            |
+| `MAIL_SECURE`                 | `false` | TLS on connect                                         |
+| `MAIL_USER` / `MAIL_PASSWORD` | —       | Optional SMTP auth                                     |
+| `MAIL_FROM`                   | —       | e.g. `"My App <no-reply@example.com>"`                 |
 
 Config is consumed through `ConfigService<EnvironmentVariables, true>` and is
 fully typed: `config.get<JwtConfig>('JWT').ACCESS_TOKEN_SECRET`.
@@ -93,6 +99,7 @@ src/
 ├── auth/              # register / login, JWT strategy, guard, decorators
 ├── encryption/        # password hashing (see below)
 ├── health/            # GET /health
+├── emails/            # nodemailer + React Email templates
 ├── seed/              # pnpm seed
 ├── users/             # users module (schema, repository, service, mapper)
 ├── app.module.ts
@@ -161,6 +168,31 @@ export class CreateUserDto extends createZodDto(createUserSchema) {}
   change is effective immediately.
 - Roles live in [src/users/_utils/types/user-role.enum.ts](src/users/_utils/types/user-role.enum.ts).
 
+### Email verification & password reset
+
+| Route                            | Auth   | Effect                                                              |
+| -------------------------------- | ------ | ------------------------------------------------------------------- |
+| `POST /auth/register`            | public | Creates the user and sends a verification email                     |
+| `POST /auth/verify-email`        | public | `{ token }` → marks the email as verified                           |
+| `POST /auth/resend-verification` | access | Sends a new verification email (409 if already verified)            |
+| `POST /auth/forgot-password`     | public | `{ email }` → sends a reset email. Always 204, even for unknown emails |
+| `POST /auth/reset-password`      | public | `{ token, password }` → sets the password, revokes the refresh token |
+
+Tokens are random 256-bit strings sent in the email link
+(`CLIENT_URL/verify-email?token=…`, `CLIENT_URL/reset-password?token=…`),
+stored as SHA-256 on the user with an expiry (24 h / 1 h, see
+[auth.constants.ts](src/auth/_utils/auth.constants.ts)) and single-use.
+Login is not blocked for unverified emails; `GetUserDto.isEmailVerified`
+lets the client decide what to gate.
+
+## Emails
+
+`EmailsService` ([src/emails](src/emails)) wraps nodemailer and renders
+[React Email](https://react.email) templates (`src/emails/templates/*.tsx`) to
+HTML + plain text. Locally, everything lands in Maildev at
+<http://localhost:1080>. To add an email: write a template function returning
+JSX, add a `sendXxx` method on `EmailsService`.
+
 ```ts
 @Controller('users')
 export class UsersController {
@@ -209,6 +241,9 @@ orchestrators.
 | Missing / invalid token      | 401    | `{ message: "Unauthorized" }`                         |
 | Wrong credentials            | 401    | `{ message: "WRONG_CREDENTIALS" }`                    |
 | Refresh token invalid/rotated| 401    | `{ message: "INVALID_REFRESH_TOKEN" }`                |
+| Verification token invalid   | 400    | `{ message: "INVALID_VERIFICATION_TOKEN" }`           |
+| Reset token invalid/expired  | 400    | `{ message: "INVALID_RESET_TOKEN" }`                  |
+| Email already verified       | 409    | `{ message: "EMAIL_ALREADY_VERIFIED" }`               |
 | Insufficient role            | 403    | `{ message: "INSUFFICIENT_ROLE" }`                    |
 | Email already registered     | 409    | `{ message: "EMAIL_ALREADY_USED" }`                   |
 | Duplicate key at DB level    | 409    | `{ message: "DUPLICATE_KEY" }`                        |

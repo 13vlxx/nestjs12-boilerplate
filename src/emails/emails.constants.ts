@@ -1,0 +1,1 @@
+export const EMAIL_TRANSPORTER = Symbol('EMAIL_TRANSPORTER');
