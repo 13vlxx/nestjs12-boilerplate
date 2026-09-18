@@ -6,11 +6,19 @@ const serverConfigSchema = z.object({
   NODE_ENV: z.enum(NodeEnvEnum),
 });
 
-export const envSchema = z.object({
-  SERVER: serverConfigSchema,
+const databaseConfigSchema = z.object({
+  DATABASE_URL: z.string(),
+  DATABASE_NAME: z.string(),
 });
 
 export type ServerConfig = z.infer<typeof serverConfigSchema>;
+export type DatabaseConfig = z.infer<typeof databaseConfigSchema>;
+
+export const envSchema = z.object({
+  SERVER: serverConfigSchema,
+  DATABASE: databaseConfigSchema,
+});
+
 export type EnvironmentVariables = z.infer<typeof envSchema>;
 
 export function validateEnv(
@@ -20,6 +28,10 @@ export function validateEnv(
     SERVER: {
       PORT: config.PORT,
       NODE_ENV: config.NODE_ENV,
+    },
+    DATABASE: {
+      DATABASE_URL: config.DATABASE_URL,
+      DATABASE_NAME: config.DATABASE_NAME,
     },
   });
 
