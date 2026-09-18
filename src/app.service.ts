@@ -4,7 +4,7 @@ import { Injectable } from '@nestjs/common';
 export class AppService {
   constructor() {}
 
-  healthCheck() {
+  getHealth() {
     return {
       backend: 'healthy',
     };

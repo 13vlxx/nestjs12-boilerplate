@@ -11,6 +11,7 @@ import {
 } from './_utils/config/env.config.js';
 import { AuthModule } from './auth/auth.module.js';
 import { MongooseModule } from '@nestjs/mongoose';
+import { UsersModule } from './users/users.module.js';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { MongooseModule } from '@nestjs/mongoose';
       }),
     }),
     AuthModule,
+    UsersModule,
   ],
   controllers: [AppController],
   providers: [

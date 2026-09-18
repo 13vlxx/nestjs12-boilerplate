@@ -1,0 +1,22 @@
+# https://taskfile.dev
+version: '3'
+tasks:
+  dev:
+    desc: Start the application in development mode
+    cmds:
+      - nest start --watch
+
+  test:
+    desc: Run the tests
+    cmds:
+      - nest test
+
+  lint:
+    desc: Run the linter
+    cmds:
+      - nest lint
+
+  build:
+    desc: Build the application
+    cmds:
+      - nest build
