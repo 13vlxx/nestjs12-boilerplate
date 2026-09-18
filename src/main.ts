@@ -1,15 +1,16 @@
 import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module.js';
-import { Logger, ValidationPipe } from '@nestjs/common';
-import { MongoDBExceptionFilter } from './_utils/filters/mongo-exception.filter.js';
-import validationPipeOptions from './_utils/config/validation-pipe-options.config.js';
+import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import {
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { cleanupOpenApiDoc } from 'nestjs-zod';
+import { AppModule } from './app.module.js';
+import { MongoDBExceptionFilter } from './_utils/filters/mongo-exception.filter.js';
+import swaggerCustomOptions from './_utils/config/swagger-custom-options.config.js';
+import type {
   EnvironmentVariables,
   ServerConfig,
 } from './_utils/config/env.config.js';
 import { NodeEnvEnum } from './_utils/config/types/node-env.type.js';
-import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -25,8 +26,7 @@ async function bootstrap() {
 
   app
     .setGlobalPrefix('api/v1')
-    .useGlobalFilters(new MongoDBExceptionFilter())
-    .useGlobalPipes(new ValidationPipe(validationPipeOptions));
+    .useGlobalFilters(new MongoDBExceptionFilter());
 
   if (!isProd) {
     const config = new DocumentBuilder()
@@ -36,7 +36,12 @@ async function bootstrap() {
       .addBearerAuth()
       .build();
     const document = SwaggerModule.createDocument(app, config);
-    SwaggerModule.setup('api/doc', app, document);
+    SwaggerModule.setup(
+      'api/doc',
+      app,
+      cleanupOpenApiDoc(document),
+      swaggerCustomOptions,
+    );
   }
 
   await app.listen(port);
