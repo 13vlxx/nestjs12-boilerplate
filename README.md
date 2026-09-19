@@ -15,6 +15,7 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 | Auth              | `@nestjs/passport` + `passport-jwt`, access + refresh tokens as Bearer |
 | Password hashing  | bcrypt behind an upgradable `EncryptionService`                        |
 | Emails            | nodemailer + React Email templates (Maildev locally)                   |
+| Files             | S3-compatible storage (RustFS locally), multipart upload, presigned reads|
 | Rate limiting     | `@nestjs/throttler`                                                    |
 | Health            | `@nestjs/terminus` (MongoDB ping)                                      |
 | Docs              | Swagger UI at `/api/doc` (disabled in production)                      |
@@ -87,6 +88,11 @@ refuses to boot with a clear error if anything is missing or malformed.
 | `MAIL_SECURE`                 | `false` | TLS on connect                                         |
 | `MAIL_USER` / `MAIL_PASSWORD` | —       | Optional SMTP auth                                     |
 | `MAIL_FROM`                   | —       | e.g. `"My App <no-reply@example.com>"`                 |
+| `S3_ENDPOINT`                 | —       | e.g. `http://localhost:9000` (RustFS) or AWS endpoint  |
+| `S3_REGION`                   | `us-east-1` |                                                    |
+| `S3_ACCESS_KEY` / `S3_SECRET_KEY` | —   |                                                        |
+| `S3_BUCKET`                   | —       | Created at startup if missing                          |
+| `S3_FORCE_PATH_STYLE`         | `true`  | `true` for RustFS/MinIO, `false` for AWS               |
 
 Config is consumed through `ConfigService<EnvironmentVariables, true>` and is
 fully typed: `config.get<JwtConfig>('JWT').ACCESS_TOKEN_SECRET`.
@@ -100,6 +106,7 @@ src/
 ├── encryption/        # password hashing (see below)
 ├── health/            # GET /health
 ├── emails/            # nodemailer + React Email templates
+├── s3/                # S3 client, FormDataRequest/uploadedFile helpers, S3File sub-document
 ├── seed/              # pnpm seed
 ├── users/             # users module (schema, repository, service, mapper)
 ├── app.module.ts
@@ -221,6 +228,56 @@ to a stronger algorithm, add an `Encrypter` with a higher `securityLevel` in
 new passwords use it right away and existing ones are transparently re-hashed
 on the user's next successful login.
 
+## Files & uploads
+
+Uploads are `multipart/form-data` and the whole form, **files included**, is
+one Zod DTO validated by the global pipe, like any JSON body:
+
+```ts
+export const updateProfilePictureSchema = z.strictObject({
+  file: uploadedFile({ mimeTypes: IMAGE_MIME_TYPES, maxSize: toMB(8) }),
+});
+
+@Put('me/profile-picture')
+@FormDataRequest({ files: [{ name: 'file' }], maxFileSize: toMB(8) })
+updateProfilePicture(@Body() dto: UpdateProfilePictureDto) {
+  // dto.file: File
+}
+```
+
+Several optional files work the same way — `maxCount` on the field and
+`z.array(uploadedFile(...)).max(5).optional()` in the schema — and text
+fields, cross-field `.refine()`s and `strictObject` apply as usual.
+
+- `@FormDataRequest()` ([form-data-request.decorator.ts](src/s3/_utils/decorators/form-data-request.decorator.ts))
+  runs multer with a hard size/count limit (413 / 400 beyond it), then moves
+  each uploaded file into `req.body` as a web `File` whose `type` is the MIME
+  **detected from its magic bytes** ([magic-bytes.ts](src/s3/_utils/magic-bytes.ts)),
+  and marks the route as multipart for Swagger.
+- `uploadedFile({ mimeTypes, maxSize })` ([uploaded-file.schema.ts](src/s3/_utils/schemas/uploaded-file.schema.ts))
+  is `z.file()` with size and type checks. Because `type` comes from the
+  content, a `.txt` renamed `.png` is rejected. Allowed types live in
+  [mime-type.enum.ts](src/s3/_utils/types/mime-type.enum.ts); adding one means
+  adding its signature to `magic-bytes.ts`.
+- Text fields arrive as strings in multipart: use `z.coerce.number()` /
+  `z.stringbool()` for numbers and booleans.
+- Swagger renders the form with file pickers, so uploads are testable from
+  `/api/doc`.
+
+Storage: `S3Service.uploadFile(file, folder)` puts the object in the bucket
+(folder layout in [s3-keys.mapper.ts](src/s3/s3-keys.mapper.ts)) and returns
+an `S3File` (`key`, `fileName`, `mimeType`, `size`) to embed on the owning
+document — no `files` collection, no references. `S3Mapper.toGetS3FileDto`
+turns it into `{ url, fileName, mimeType, size }` with a presigned URL
+(15 min).
+
+`PUT /users/me/profile-picture` is the shipped example: single required
+image, previous object deleted on replace, `GetUserDto.profilePictureUrl` as
+a presigned URL or `null`. `objectIdSchema`
+([object-id.schema.ts](src/_utils/schemas/object-id.schema.ts)) is there for
+`@Param()` DTOs so a malformed id yields a 400 instead of a Mongoose
+`CastError`.
+
 ## Rate limiting
 
 Global limit from `THROTTLE_LIMIT` / `THROTTLE_TTL` per IP. `/auth/*` is
@@ -244,6 +301,8 @@ orchestrators.
 | Verification token invalid   | 400    | `{ message: "INVALID_VERIFICATION_TOKEN" }`           |
 | Reset token invalid/expired  | 400    | `{ message: "INVALID_RESET_TOKEN" }`                  |
 | Email already verified       | 409    | `{ message: "EMAIL_ALREADY_VERIFIED" }`               |
+| Upload rejected (type/size)  | 400    | `{ message: "Validation failed", errors: [...] }`     |
+| Upload over multer limit     | 413    | `{ message: "File too large" }`                        |
 | Insufficient role            | 403    | `{ message: "INSUFFICIENT_ROLE" }`                    |
 | Email already registered     | 409    | `{ message: "EMAIL_ALREADY_USED" }`                   |
 | Duplicate key at DB level    | 409    | `{ message: "DUPLICATE_KEY" }`                        |

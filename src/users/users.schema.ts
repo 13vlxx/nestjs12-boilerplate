@@ -1,6 +1,7 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { HydratedDocument } from 'mongoose';
 import { UserRoleEnum } from './_utils/types/user-role.enum.js';
+import { S3File, S3FileSchema } from '../s3/s3-file.schema.js';
 
 export type UserDocument = HydratedDocument<User>;
 
@@ -54,6 +55,9 @@ export class User {
 
   @Prop({ type: ActionTokenSchema, default: null })
   passwordResetToken: ActionToken | null;
+
+  @Prop({ type: S3FileSchema, default: null })
+  profilePicture: S3File | null;
 }
 
 export const UserSchema = SchemaFactory.createForClass(User);

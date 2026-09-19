@@ -48,6 +48,15 @@ const mailConfigSchema = z.object({
   FROM: z.string(),
 });
 
+const s3ConfigSchema = z.object({
+  ENDPOINT: z.url(),
+  REGION: z.string().default('us-east-1'),
+  ACCESS_KEY: z.string(),
+  SECRET_KEY: z.string(),
+  BUCKET: z.string(),
+  FORCE_PATH_STYLE: z.stringbool().default(true),
+});
+
 const throttleConfigSchema = z.object({
   TTL: z.coerce.number().int().positive().default(60_000),
   LIMIT: z.coerce.number().int().positive().default(100),
@@ -58,6 +67,7 @@ export type DatabaseConfig = z.infer<typeof databaseConfigSchema>;
 export type JwtConfig = z.infer<typeof jwtConfigSchema>;
 export type ThrottleConfig = z.infer<typeof throttleConfigSchema>;
 export type MailConfig = z.infer<typeof mailConfigSchema>;
+export type S3Config = z.infer<typeof s3ConfigSchema>;
 
 export const envSchema = z.object({
   SERVER: serverConfigSchema,
@@ -65,6 +75,7 @@ export const envSchema = z.object({
   JWT: jwtConfigSchema,
   THROTTLE: throttleConfigSchema,
   MAIL: mailConfigSchema,
+  S3: s3ConfigSchema,
 });
 
 export type EnvironmentVariables = z.infer<typeof envSchema>;
@@ -100,6 +111,14 @@ export function validateEnv(
       USER: config.MAIL_USER,
       PASSWORD: config.MAIL_PASSWORD,
       FROM: config.MAIL_FROM,
+    },
+    S3: {
+      ENDPOINT: config.S3_ENDPOINT,
+      REGION: config.S3_REGION,
+      ACCESS_KEY: config.S3_ACCESS_KEY,
+      SECRET_KEY: config.S3_SECRET_KEY,
+      BUCKET: config.S3_BUCKET,
+      FORCE_PATH_STYLE: config.S3_FORCE_PATH_STYLE,
     },
   });
 

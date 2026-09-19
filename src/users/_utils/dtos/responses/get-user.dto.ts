@@ -9,6 +9,7 @@ export const getUserSchema = z.strictObject({
   email: z.string(),
   isEmailVerified: z.boolean(),
   role: z.enum(UserRoleEnum),
+  profilePictureUrl: z.string().nullable(),
 });
 
 export class GetUserDto extends createZodDto(getUserSchema) {}

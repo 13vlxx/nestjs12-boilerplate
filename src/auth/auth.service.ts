@@ -144,7 +144,7 @@ export class AuthService {
     return {
       accessToken,
       refreshToken,
-      user: this.usersMapper.toGetUserDto(user),
+      user: await this.usersMapper.toGetUserDto(user),
     };
   }
 }

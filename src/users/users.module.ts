@@ -7,11 +7,13 @@ import { UsersMapper } from './users.mapper.js';
 import { UsersRepository } from './users.repository.js';
 import { UsersExceptions } from './_utils/errors/users-exceptions.types.js';
 import { EncryptionModule } from '../encryption/encryption.module.js';
+import { S3Module } from '../s3/s3.module.js';
 
 @Module({
   imports: [
     MongooseModule.forFeature([{ name: User.name, schema: UserSchema }]),
     EncryptionModule,
+    S3Module,
   ],
   controllers: [UsersController],
   providers: [UsersService, UsersMapper, UsersRepository, UsersExceptions],

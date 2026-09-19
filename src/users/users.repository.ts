@@ -1,7 +1,8 @@
 import { Injectable } from '@nestjs/common';
 import { ActionToken, User, UserDocument } from './users.schema.js';
-import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
+import { S3File } from '../s3/s3-file.schema.js';
+import { InjectModel } from '@nestjs/mongoose';
 import { UsersExceptions } from './_utils/errors/users-exceptions.types.js';
 
 @Injectable()
@@ -63,6 +64,14 @@ export class UsersRepository {
     token: ActionToken | null,
   ): Promise<UserDocument> => {
     user.passwordResetToken = token;
+    return user.save();
+  };
+
+  updateProfilePicture = (
+    user: UserDocument,
+    picture: S3File | null,
+  ): Promise<UserDocument> => {
+    user.profilePicture = picture;
     return user.save();
   };
 

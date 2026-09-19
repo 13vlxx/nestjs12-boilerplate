@@ -7,6 +7,9 @@ import { CreateUserDto } from './_utils/dtos/requests/create-user.dto.js';
 import { GetUserDto } from './_utils/dtos/responses/get-user.dto.js';
 import { ActionToken, UserDocument } from './users.schema.js';
 import { UserRoleEnum } from './_utils/types/user-role.enum.js';
+import { S3Service } from '../s3/s3.service.js';
+import { S3KeysMapper } from '../s3/s3-keys.mapper.js';
+import { UpdateProfilePictureDto } from './_utils/dtos/requests/update-profile-picture.dto.js';
 
 @Injectable()
 export class UsersService {
@@ -15,9 +18,35 @@ export class UsersService {
     private readonly mapper: UsersMapper,
     private readonly exceptions: UsersExceptions,
     private readonly encryptionService: EncryptionService,
+    private readonly s3Service: S3Service,
+    private readonly s3KeysMapper: S3KeysMapper,
   ) {}
 
-  getMe = (user: UserDocument): GetUserDto => this.mapper.toGetUserDto(user);
+  getMe = (user: UserDocument): Promise<GetUserDto> =>
+    this.mapper.toGetUserDto(user);
+
+  async updateProfilePicture(
+    user: UserDocument,
+    dto: UpdateProfilePictureDto,
+  ): Promise<GetUserDto> {
+    const picture = await this.s3Service.uploadFile(
+      dto.file,
+      this.s3KeysMapper.toProfilePictureFolder(user._id.toString()),
+    );
+    const previous = user.profilePicture;
+
+    await this.repository.updateProfilePicture(user, picture);
+    if (previous) await this.s3Service.deleteFile(previous.key);
+
+    return this.mapper.toGetUserDto(user);
+  }
+
+  async removeProfilePicture(user: UserDocument): Promise<GetUserDto> {
+    const previous = user.profilePicture;
+    await this.repository.updateProfilePicture(user, null);
+    if (previous) await this.s3Service.deleteFile(previous.key);
+    return this.mapper.toGetUserDto(user);
+  }
 
   async findAll(): Promise<GetUserDto[]> {
     const users = await this.repository.findAll();
@@ -42,6 +71,7 @@ export class UsersService {
       hashedRefreshToken: null,
       emailVerificationToken: null,
       passwordResetToken: null,
+      profilePicture: null,
     });
   }
 
