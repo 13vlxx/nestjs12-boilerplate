@@ -11,7 +11,6 @@ import type {
   ActionTokenRecord,
 } from './_utils/types/action-token.type.js';
 import { ActionTokenTypeEnum } from './_utils/types/action-token-type.enum.js';
-import { UserRoleEnum } from './_utils/types/user-role.enum.js';
 import { S3Service } from '../s3/s3.service.js';
 import { S3KeysMapper } from '../s3/s3-keys.mapper.js';
 import { UpdateProfilePictureDto } from './_utils/dtos/requests/update-profile-picture.dto.js';
@@ -63,16 +62,12 @@ export class UsersService {
     return this.mapper.toGetUserDtos(users);
   }
 
-  async create(
-    dto: CreateUserDto,
-    role: UserRoleEnum = UserRoleEnum.USER,
-    isEmailVerified = false,
-  ): Promise<UserRecord> {
+  async create(dto: CreateUserDto): Promise<UserRecord> {
     const existing = await this.repository.findByEmailOrNull(dto.email);
     if (existing) throw this.exceptions.EMAIL_ALREADY_USED;
 
     const hashedPassword = await this.encryptionService.encrypt(dto.password);
-    return this.repository.create(dto, hashedPassword, role, isEmailVerified);
+    return this.repository.create(dto, hashedPassword);
   }
 
   findById = (id: string): Promise<UserRecord> => this.repository.findById(id);

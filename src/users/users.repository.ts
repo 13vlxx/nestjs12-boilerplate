@@ -8,7 +8,6 @@ import {
   type ActionTokenRecord,
 } from './_utils/types/action-token.type.js';
 import { ActionTokenTypeEnum } from './_utils/types/action-token-type.enum.js';
-import type { UserRoleEnum } from './_utils/types/user-role.enum.js';
 import type { CreateUserDto } from './_utils/dtos/requests/create-user.dto.js';
 import type { S3FileInput } from '../s3/_utils/types/s3-file.type.js';
 
@@ -19,20 +18,13 @@ export class UsersRepository {
     private readonly exceptions: UsersExceptions,
   ) {}
 
-  create = (
-    dto: CreateUserDto,
-    hashedPassword: string,
-    role: UserRoleEnum,
-    isEmailVerified: boolean,
-  ): Promise<UserRecord> =>
+  create = (dto: CreateUserDto, hashedPassword: string): Promise<UserRecord> =>
     this.prisma.user.create({
       data: {
         firstName: dto.firstName,
         lastName: dto.lastName,
         email: this.normalizeEmail(dto.email),
         password: hashedPassword,
-        role,
-        isEmailVerified,
       },
       include: userInclude,
     });
@@ -147,7 +139,6 @@ export class UsersRepository {
       include: userInclude,
     });
 
-  // Postgres compares text case-sensitively: emails are stored and looked up lowercased.
   private normalizeEmail = (email: string): string =>
     email.trim().toLowerCase();
 }

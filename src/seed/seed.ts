@@ -8,7 +8,7 @@ import type {
 } from '../_utils/config/env.config.js';
 import { NodeEnvEnum } from '../_utils/config/types/node-env.type.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { UsersService } from '../users/users.service.js';
+import { EncryptionService } from '../encryption/encryption.service.js';
 import { seedUsers } from './seed.data.js';
 
 /**
@@ -33,13 +33,20 @@ async function seed() {
       throw new Error('Refusing to seed a production database');
 
     const prisma = app.get(PrismaService);
-    const usersService = app.get(UsersService);
+    const encryptionService = app.get(EncryptionService);
 
     logger.log('Truncating every table…');
     await truncateAllTables(prisma);
 
     for (const { dto, role } of seedUsers) {
-      await usersService.create(dto, role, true);
+      await prisma.user.create({
+        data: {
+          ...dto,
+          password: await encryptionService.encrypt(dto.password),
+          role,
+          isEmailVerified: true,
+        },
+      });
       logger.log(`Created ${role} ${dto.email}`);
     }
 
