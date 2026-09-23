@@ -1,6 +1,8 @@
 import type { SwaggerCustomOptions } from '@nestjs/swagger';
 
 const swaggerCustomOptions: SwaggerCustomOptions = {
+  jsonDocumentUrl: 'api/doc/json',
+  yamlDocumentUrl: 'api/doc/yaml',
   swaggerOptions: {
     persistAuthorization: true,
     tryItOutEnabled: true,
