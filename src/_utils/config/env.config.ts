@@ -19,8 +19,7 @@ const serverConfigSchema = z.object({
 });
 
 const databaseConfigSchema = z.object({
-  DATABASE_URL: z.string(),
-  DATABASE_NAME: z.string(),
+  DATABASE_URL: z.url(),
 });
 
 const jwtConfigSchema = z
@@ -92,7 +91,6 @@ export function validateEnv(
     },
     DATABASE: {
       DATABASE_URL: config.DATABASE_URL,
-      DATABASE_NAME: config.DATABASE_NAME,
     },
     JWT: {
       ACCESS_TOKEN_SECRET: config.JWT_ACCESS_TOKEN_SECRET,

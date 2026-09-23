@@ -1,20 +1,20 @@
 import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
-import { getConnectionToken } from '@nestjs/mongoose';
-import type { Connection } from 'mongoose';
 import { AppModule } from '../app.module.js';
 import type {
   EnvironmentVariables,
   ServerConfig,
 } from '../_utils/config/env.config.js';
 import { NodeEnvEnum } from '../_utils/config/types/node-env.type.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { UsersService } from '../users/users.service.js';
 import { seedUsers } from './seed.data.js';
 
 /**
- * Drops the whole database, recreates the indexes and inserts the data from
- * seed.data.ts. Refuses to run in production.
+ * Empties every table (the schema itself comes from the migrations, applied
+ * by `pnpm seed` beforehand) and inserts the data from seed.data.ts. Refuses
+ * to run in production.
  *
  *   pnpm seed
  */
@@ -32,16 +32,11 @@ async function seed() {
     if (NODE_ENV === NodeEnvEnum.PROD)
       throw new Error('Refusing to seed a production database');
 
-    const connection = app.get<Connection>(getConnectionToken());
+    const prisma = app.get(PrismaService);
     const usersService = app.get(UsersService);
 
-    logger.log(`Dropping database "${connection.name}"…`);
-    await connection.dropDatabase();
-
-    // dropDatabase() removes the indexes too (e.g. the unique email index).
-    await Promise.all(
-      Object.values(connection.models).map((model) => model.syncIndexes()),
-    );
+    logger.log('Truncating every table…');
+    await truncateAllTables(prisma);
 
     for (const { dto, role } of seedUsers) {
       await usersService.create(dto, role, true);
@@ -52,6 +47,20 @@ async function seed() {
   } finally {
     await app.close();
   }
+}
+
+async function truncateAllTables(prisma: PrismaService): Promise<void> {
+  const tables = await prisma.$queryRaw<{ name: string }[]>`
+    SELECT tablename AS name FROM pg_tables
+    WHERE schemaname = current_schema() AND tablename <> '_prisma_migrations'
+  `;
+  if (!tables.length) return;
+
+  // Table names come from the catalog, not from user input.
+  const list = tables.map(({ name }) => `"${name}"`).join(', ');
+  await prisma.$executeRawUnsafe(
+    `TRUNCATE TABLE ${list} RESTART IDENTITY CASCADE`,
+  );
 }
 
 await seed();

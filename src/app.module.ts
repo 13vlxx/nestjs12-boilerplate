@@ -1,11 +1,9 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD, APP_INTERCEPTOR, APP_PIPE } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { MongooseModule } from '@nestjs/mongoose';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { ZodSerializerInterceptor, ZodValidationPipe } from 'nestjs-zod';
 import {
-  DatabaseConfig,
   EnvironmentVariables,
   ThrottleConfig,
   validateEnv,
@@ -20,14 +18,6 @@ import { HealthModule } from './health/health.module.js';
       validate: validateEnv,
       isGlobal: true,
       envFilePath: ['.env.development', '.env'],
-    }),
-    MongooseModule.forRootAsync({
-      imports: [ConfigModule],
-      inject: [ConfigService],
-      useFactory: (config: ConfigService<EnvironmentVariables, true>) => ({
-        uri: config.get<DatabaseConfig>('DATABASE').DATABASE_URL,
-        dbName: config.get<DatabaseConfig>('DATABASE').DATABASE_NAME,
-      }),
     }),
     ThrottlerModule.forRootAsync({
       imports: [ConfigModule],

@@ -5,7 +5,7 @@ import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
 import { annotateSwaggerWithAccess } from './auth/_utils/swagger/annotate-access.js';
 import { AppModule } from './app.module.js';
-import { MongoDBExceptionFilter } from './_utils/filters/mongo-exception.filter.js';
+import { PrismaExceptionFilter } from './_utils/filters/prisma-exception.filter.js';
 import swaggerCustomOptions from './_utils/config/swagger-custom-options.config.js';
 import type {
   EnvironmentVariables,
@@ -27,7 +27,7 @@ async function bootstrap() {
 
   app
     .setGlobalPrefix('api/v1')
-    .useGlobalFilters(new MongoDBExceptionFilter())
+    .useGlobalFilters(new PrismaExceptionFilter())
     .enableShutdownHooks();
   app.enableCors({ origin: serverConfig.CORS_ORIGINS, credentials: true });
 

@@ -12,7 +12,7 @@ import { AuthResponseDto } from './_utils/dtos/responses/auth-response.dto.js';
 import { Public } from './_utils/decorators/public.decorator.js';
 import { RefreshTokenProtected } from './_utils/decorators/refresh-token-protected.decorator.js';
 import { ConnectedUser } from './_utils/decorators/connected-user.decorator.js';
-import type { UserDocument } from '../users/users.schema.js';
+import type { UserRecord } from '../users/_utils/types/user.type.js';
 
 @Throttle({ default: { limit: 10, ttl: 60_000 } })
 @ApiTags('Auth')
@@ -37,13 +37,13 @@ export class AuthController {
   @RefreshTokenProtected()
   @Post('refresh')
   @ZodResponse({ status: HttpStatus.OK, type: AuthResponseDto })
-  refresh(@ConnectedUser() user: UserDocument): Promise<AuthResponseDto> {
+  refresh(@ConnectedUser() user: UserRecord): Promise<AuthResponseDto> {
     return this.authService.refresh(user);
   }
 
   @Post('logout')
   @HttpCode(HttpStatus.NO_CONTENT)
-  logout(@ConnectedUser() user: UserDocument): Promise<void> {
+  logout(@ConnectedUser() user: UserRecord): Promise<void> {
     return this.authService.logout(user);
   }
 
@@ -56,7 +56,7 @@ export class AuthController {
 
   @Post('resend-verification')
   @HttpCode(HttpStatus.NO_CONTENT)
-  resendVerification(@ConnectedUser() user: UserDocument): Promise<void> {
+  resendVerification(@ConnectedUser() user: UserRecord): Promise<void> {
     return this.authService.sendEmailVerification(user);
   }
 

@@ -4,9 +4,10 @@ import { SkipThrottle } from '@nestjs/throttler';
 import {
   HealthCheck,
   HealthCheckService,
-  MongooseHealthIndicator,
+  PrismaHealthIndicator,
 } from '@nestjs/terminus';
 import { Public } from '../auth/_utils/decorators/public.decorator.js';
+import { PrismaService } from '../prisma/prisma.service.js';
 
 @Public()
 @SkipThrottle()
@@ -15,14 +16,16 @@ import { Public } from '../auth/_utils/decorators/public.decorator.js';
 export class HealthController {
   constructor(
     private readonly health: HealthCheckService,
-    private readonly mongoose: MongooseHealthIndicator,
+    private readonly prismaHealth: PrismaHealthIndicator,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get()
   @HealthCheck()
   check() {
     return this.health.check([
-      () => this.mongoose.pingCheck('mongodb').withTimeout(1500),
+      () =>
+        this.prismaHealth.pingCheck('database', this.prisma).withTimeout(1500),
     ]);
   }
 }

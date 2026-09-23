@@ -1,14 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { GetUserDto } from './_utils/dtos/responses/get-user.dto.js';
-import { UserDocument } from './users.schema.js';
+import type { UserRecord } from './_utils/types/user.type.js';
 import { S3Service } from '../s3/s3.service.js';
 
 @Injectable()
 export class UsersMapper {
   constructor(private readonly s3Service: S3Service) {}
 
-  toGetUserDto = async (user: UserDocument): Promise<GetUserDto> => ({
-    id: user._id.toString(),
+  toGetUserDto = async (user: UserRecord): Promise<GetUserDto> => ({
+    id: user.id,
     firstName: user.firstName,
     lastName: user.lastName,
     email: user.email,
@@ -19,6 +19,6 @@ export class UsersMapper {
       : null,
   });
 
-  toGetUserDtos = (users: UserDocument[]): Promise<GetUserDto[]> =>
+  toGetUserDtos = (users: UserRecord[]): Promise<GetUserDto[]> =>
     Promise.all(users.map(this.toGetUserDto));
 }

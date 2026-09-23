@@ -23,7 +23,12 @@ import {
   EMAIL_VERIFICATION_TOKEN_TTL_MS,
   PASSWORD_RESET_TOKEN_TTL_MS,
 } from './_utils/auth.constants.js';
-import { ActionToken, UserDocument } from '../users/users.schema.js';
+import type { UserRecord } from '../users/_utils/types/user.type.js';
+import type {
+  ActionTokenInput,
+  ActionTokenRecord,
+} from '../users/_utils/types/action-token.type.js';
+import { ActionTokenTypeEnum } from '../users/_utils/types/action-token-type.enum.js';
 
 @Injectable()
 export class AuthService {
@@ -61,32 +66,34 @@ export class AuthService {
     return this.issueTokens(user);
   }
 
-  refresh = (user: UserDocument): Promise<AuthResponseDto> =>
+  refresh = (user: UserRecord): Promise<AuthResponseDto> =>
     this.issueTokens(user);
 
-  async logout(user: UserDocument): Promise<void> {
+  async logout(user: UserRecord): Promise<void> {
     await this.usersService.updateHashedRefreshToken(user, null);
   }
 
-  async sendEmailVerification(user: UserDocument): Promise<void> {
+  async sendEmailVerification(user: UserRecord): Promise<void> {
     if (user.isEmailVerified) throw this.exceptions.EMAIL_ALREADY_VERIFIED;
 
     const token = generateToken();
-    await this.usersService.updateEmailVerificationToken(
+    await this.usersService.upsertActionToken(
       user,
+      ActionTokenTypeEnum.EMAIL_VERIFICATION,
       this.actionToken(token, EMAIL_VERIFICATION_TOKEN_TTL_MS),
     );
     await this.emailsService.sendEmailVerification(user, token);
   }
 
   async verifyEmail(dto: VerifyEmailDto): Promise<void> {
-    const user = await this.usersService.findByEmailVerificationTokenHashOrNull(
+    const token = await this.usersService.findActionTokenOrNull(
+      ActionTokenTypeEnum.EMAIL_VERIFICATION,
       hashToken(dto.token),
     );
-    if (!user || this.isExpired(user.emailVerificationToken))
+    if (!token || this.isExpired(token))
       throw this.exceptions.INVALID_VERIFICATION_TOKEN;
 
-    await this.usersService.markEmailVerified(user);
+    await this.usersService.markEmailVerified(token.user);
   }
 
   async forgotPassword(dto: ForgotPasswordDto): Promise<void> {
@@ -94,36 +101,36 @@ export class AuthService {
     if (!user) return;
 
     const token = generateToken();
-    await this.usersService.updatePasswordResetToken(
+    await this.usersService.upsertActionToken(
       user,
+      ActionTokenTypeEnum.PASSWORD_RESET,
       this.actionToken(token, PASSWORD_RESET_TOKEN_TTL_MS),
     );
     await this.emailsService.sendPasswordReset(user, token);
   }
 
   async resetPassword(dto: ResetPasswordDto): Promise<void> {
-    const user = await this.usersService.findByPasswordResetTokenHashOrNull(
+    const token = await this.usersService.findActionTokenOrNull(
+      ActionTokenTypeEnum.PASSWORD_RESET,
       hashToken(dto.token),
     );
-    if (!user || this.isExpired(user.passwordResetToken))
+    if (!token || this.isExpired(token))
       throw this.exceptions.INVALID_RESET_TOKEN;
 
-    await this.usersService.updatePassword(user, dto.password);
-    await this.usersService.updatePasswordResetToken(user, null);
-    await this.usersService.updateHashedRefreshToken(user, null);
+    await this.usersService.resetPassword(token.user, dto.password);
   }
 
-  private actionToken(token: string, ttlMs: number): ActionToken {
+  private actionToken(token: string, ttlMs: number): ActionTokenInput {
     return { hash: hashToken(token), expiresAt: new Date(Date.now() + ttlMs) };
   }
 
-  private isExpired(token: ActionToken | null): boolean {
-    return !token || token.expiresAt.getTime() < Date.now();
+  private isExpired(token: ActionTokenRecord): boolean {
+    return token.expiresAt.getTime() < Date.now();
   }
 
-  private async issueTokens(user: UserDocument): Promise<AuthResponseDto> {
+  private async issueTokens(user: UserRecord): Promise<AuthResponseDto> {
     const payload = (): JwtPayload => ({
-      sub: user._id.toString(),
+      sub: user.id,
       email: user.email,
       jti: randomUUID(),
     });

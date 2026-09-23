@@ -5,7 +5,12 @@ import { UsersExceptions } from './_utils/errors/users-exceptions.types.js';
 import { EncryptionService } from '../encryption/encryption.service.js';
 import { CreateUserDto } from './_utils/dtos/requests/create-user.dto.js';
 import { GetUserDto } from './_utils/dtos/responses/get-user.dto.js';
-import { ActionToken, UserDocument } from './users.schema.js';
+import type { UserRecord } from './_utils/types/user.type.js';
+import type {
+  ActionTokenInput,
+  ActionTokenRecord,
+} from './_utils/types/action-token.type.js';
+import { ActionTokenTypeEnum } from './_utils/types/action-token-type.enum.js';
 import { UserRoleEnum } from './_utils/types/user-role.enum.js';
 import { S3Service } from '../s3/s3.service.js';
 import { S3KeysMapper } from '../s3/s3-keys.mapper.js';
@@ -22,30 +27,35 @@ export class UsersService {
     private readonly s3KeysMapper: S3KeysMapper,
   ) {}
 
-  getMe = (user: UserDocument): Promise<GetUserDto> =>
+  getMe = (user: UserRecord): Promise<GetUserDto> =>
     this.mapper.toGetUserDto(user);
 
   async updateProfilePicture(
-    user: UserDocument,
+    user: UserRecord,
     dto: UpdateProfilePictureDto,
   ): Promise<GetUserDto> {
     const picture = await this.s3Service.uploadFile(
       dto.file,
-      this.s3KeysMapper.toProfilePictureFolder(user._id.toString()),
+      this.s3KeysMapper.toProfilePictureFolder(user.id),
     );
-    const previous = user.profilePicture;
 
-    await this.repository.updateProfilePicture(user, picture);
-    if (previous) await this.s3Service.deleteFile(previous.key);
+    const updated = await this.repository.upsertProfilePicture(
+      user.id,
+      picture,
+    );
+    if (user.profilePicture)
+      await this.s3Service.deleteFile(user.profilePicture.key);
 
-    return this.mapper.toGetUserDto(user);
+    return this.mapper.toGetUserDto(updated);
   }
 
-  async removeProfilePicture(user: UserDocument): Promise<GetUserDto> {
-    const previous = user.profilePicture;
-    await this.repository.updateProfilePicture(user, null);
-    if (previous) await this.s3Service.deleteFile(previous.key);
-    return this.mapper.toGetUserDto(user);
+  async removeProfilePicture(user: UserRecord): Promise<GetUserDto> {
+    if (!user.profilePicture) return this.mapper.toGetUserDto(user);
+
+    const updated = await this.repository.deleteProfilePicture(user.id);
+    await this.s3Service.deleteFile(user.profilePicture.key);
+
+    return this.mapper.toGetUserDto(updated);
   }
 
   async findAll(): Promise<GetUserDto[]> {
@@ -57,7 +67,7 @@ export class UsersService {
     dto: CreateUserDto,
     role: UserRoleEnum = UserRoleEnum.USER,
     isEmailVerified = false,
-  ): Promise<UserDocument> {
+  ): Promise<UserRecord> {
     const existing = await this.repository.findByEmailOrNull(dto.email);
     if (existing) throw this.exceptions.EMAIL_ALREADY_USED;
 
@@ -68,58 +78,52 @@ export class UsersService {
       isEmailVerified,
       password: await this.encryptionService.encrypt(dto.password),
       role,
-      hashedRefreshToken: null,
-      emailVerificationToken: null,
-      passwordResetToken: null,
-      profilePicture: null,
     });
   }
 
-  findById = (id: string): Promise<UserDocument> =>
-    this.repository.findById(id);
+  findById = (id: string): Promise<UserRecord> => this.repository.findById(id);
 
-  findByIdOrNull = (id: string): Promise<UserDocument | null> =>
+  findByIdOrNull = (id: string): Promise<UserRecord | null> =>
     this.repository.findByIdOrNull(id);
 
-  findByEmailOrNull = (email: string): Promise<UserDocument | null> =>
+  findByEmailOrNull = (email: string): Promise<UserRecord | null> =>
     this.repository.findByEmailOrNull(email);
 
-  findByEmailVerificationTokenHashOrNull = (
+  findActionTokenOrNull = (
+    type: ActionTokenTypeEnum,
     hash: string,
-  ): Promise<UserDocument | null> =>
-    this.repository.findByEmailVerificationTokenHashOrNull(hash);
-
-  findByPasswordResetTokenHashOrNull = (
-    hash: string,
-  ): Promise<UserDocument | null> =>
-    this.repository.findByPasswordResetTokenHashOrNull(hash);
+  ): Promise<ActionTokenRecord | null> =>
+    this.repository.findActionTokenOrNull(type, hash);
 
   updateHashedRefreshToken = (
-    user: UserDocument,
+    user: UserRecord,
     hashedRefreshToken: string | null,
-  ): Promise<UserDocument> =>
-    this.repository.updateHashedRefreshToken(user, hashedRefreshToken);
+  ): Promise<UserRecord> =>
+    this.repository.updateHashedRefreshToken(user.id, hashedRefreshToken);
 
-  updateEmailVerificationToken = (
-    user: UserDocument,
-    token: ActionToken | null,
-  ): Promise<UserDocument> =>
-    this.repository.updateEmailVerificationToken(user, token);
+  upsertActionToken = (
+    user: UserRecord,
+    type: ActionTokenTypeEnum,
+    token: ActionTokenInput,
+  ): Promise<UserRecord> =>
+    this.repository.upsertActionToken(user.id, type, token);
 
-  updatePasswordResetToken = (
-    user: UserDocument,
-    token: ActionToken | null,
-  ): Promise<UserDocument> =>
-    this.repository.updatePasswordResetToken(user, token);
-
-  markEmailVerified = (user: UserDocument): Promise<UserDocument> =>
-    this.repository.markEmailVerified(user);
+  markEmailVerified = (user: UserRecord): Promise<UserRecord> =>
+    this.repository.markEmailVerified(user.id);
 
   async updatePassword(
-    user: UserDocument,
+    user: UserRecord,
     plainPassword: string,
-  ): Promise<UserDocument> {
+  ): Promise<UserRecord> {
     const hashedPassword = await this.encryptionService.encrypt(plainPassword);
-    return this.repository.updatePassword(user, hashedPassword);
+    return this.repository.updatePassword(user.id, hashedPassword);
+  }
+
+  async resetPassword(
+    user: UserRecord,
+    plainPassword: string,
+  ): Promise<UserRecord> {
+    const hashedPassword = await this.encryptionService.encrypt(plainPassword);
+    return this.repository.resetPassword(user.id, hashedPassword);
   }
 }

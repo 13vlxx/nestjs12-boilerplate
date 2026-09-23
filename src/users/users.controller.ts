@@ -6,7 +6,7 @@ import { GetUserDto } from './_utils/dtos/responses/get-user.dto.js';
 import { UpdateProfilePictureDto } from './_utils/dtos/requests/update-profile-picture.dto.js';
 import { UserRoleEnum } from './_utils/types/user-role.enum.js';
 import { PROFILE_PICTURE_MAX_SIZE } from './_utils/users.constants.js';
-import type { UserDocument } from './users.schema.js';
+import type { UserRecord } from './_utils/types/user.type.js';
 import { Protect } from '../auth/_utils/decorators/protect.decorator.js';
 import { ConnectedUser } from '../auth/_utils/decorators/connected-user.decorator.js';
 import { FormDataRequest } from '../s3/_utils/decorators/form-data-request.decorator.js';
@@ -18,7 +18,7 @@ export class UsersController {
 
   @Get('me')
   @ZodResponse({ type: GetUserDto })
-  getMe(@ConnectedUser() user: UserDocument): Promise<GetUserDto> {
+  getMe(@ConnectedUser() user: UserRecord): Promise<GetUserDto> {
     return this.usersService.getMe(user);
   }
 
@@ -29,7 +29,7 @@ export class UsersController {
   })
   @ZodResponse({ type: GetUserDto })
   updateProfilePicture(
-    @ConnectedUser() user: UserDocument,
+    @ConnectedUser() user: UserRecord,
     @Body() dto: UpdateProfilePictureDto,
   ): Promise<GetUserDto> {
     return this.usersService.updateProfilePicture(user, dto);
@@ -37,9 +37,7 @@ export class UsersController {
 
   @Delete('me/profile-picture')
   @ZodResponse({ type: GetUserDto })
-  removeProfilePicture(
-    @ConnectedUser() user: UserDocument,
-  ): Promise<GetUserDto> {
+  removeProfilePicture(@ConnectedUser() user: UserRecord): Promise<GetUserDto> {
     return this.usersService.removeProfilePicture(user);
   }
 

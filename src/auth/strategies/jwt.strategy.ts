@@ -9,7 +9,7 @@ import type {
 import { jwtPayloadSchema } from '../_utils/types/jwt-payload.type.js';
 import { AuthExceptions } from '../_utils/errors/auth-exceptions.types.js';
 import { UsersService } from '../../users/users.service.js';
-import { UserDocument } from '../../users/users.schema.js';
+import type { UserRecord } from '../../users/_utils/types/user.type.js';
 
 export const JWT_STRATEGY_NAME = 'jwt';
 
@@ -28,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, JWT_STRATEGY_NAME) {
   }
 
   /** Whatever is returned here becomes `request.user`. */
-  async validate(rawPayload: unknown): Promise<UserDocument> {
+  async validate(rawPayload: unknown): Promise<UserRecord> {
     const payload = jwtPayloadSchema.safeParse(rawPayload);
     if (!payload.success) throw this.exceptions.INVALID_TOKEN;
 

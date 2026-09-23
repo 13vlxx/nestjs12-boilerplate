@@ -10,7 +10,7 @@ import type {
 import { jwtPayloadSchema } from '../_utils/types/jwt-payload.type.js';
 import { AuthExceptions } from '../_utils/errors/auth-exceptions.types.js';
 import { UsersService } from '../../users/users.service.js';
-import { UserDocument } from '../../users/users.schema.js';
+import type { UserRecord } from '../../users/_utils/types/user.type.js';
 import { tokenMatchesHash } from '../_utils/token.utils.js';
 
 export const JWT_REFRESH_STRATEGY_NAME = 'jwt-refresh';
@@ -38,7 +38,7 @@ export class JwtRefreshStrategy extends PassportStrategy(
     });
   }
 
-  async validate(request: Request, rawPayload: unknown): Promise<UserDocument> {
+  async validate(request: Request, rawPayload: unknown): Promise<UserRecord> {
     const payload = jwtPayloadSchema.safeParse(rawPayload);
     if (!payload.success) throw this.exceptions.INVALID_REFRESH_TOKEN;
 

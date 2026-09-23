@@ -17,8 +17,7 @@ import type {
   S3Config,
 } from '../_utils/config/env.config.js';
 import { PRESIGNED_URL_EXPIRATION_S, S3_CLIENT } from './s3.constants.js';
-import { S3File } from './s3-file.schema.js';
-import { MimeTypeEnum } from './_utils/types/mime-type.enum.js';
+import type { S3FileInput } from './_utils/types/s3-file.type.js';
 
 @Injectable()
 export class S3Service implements OnModuleInit {
@@ -38,7 +37,7 @@ export class S3Service implements OnModuleInit {
     this.logger.log(`Bucket "${this.bucket}" created`);
   }
 
-  async uploadFile(file: File, folder: string): Promise<S3File> {
+  async uploadFile(file: File, folder: string): Promise<S3FileInput> {
     const key = `${folder}/${randomUUID()}${extname(file.name).toLowerCase()}`;
 
     await this.client.send(
@@ -53,7 +52,7 @@ export class S3Service implements OnModuleInit {
     return {
       key,
       fileName: file.name,
-      mimeType: file.type as MimeTypeEnum,
+      mimeType: file.type,
       size: file.size,
     };
   }

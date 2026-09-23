@@ -1,6 +1,6 @@
 # NestJS 12 Boilerplate
 
-Opinionated starter for a NestJS 12 REST API: ESM, MongoDB (Mongoose), Zod
+Opinionated starter for a NestJS 12 REST API: ESM, PostgreSQL (Prisma), Zod
 validation end to end, JWT authentication with roles, and the production
 basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 
@@ -10,23 +10,23 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 | ----------------- | ---------------------------------------------------------------------- |
 | Runtime           | Node 24 (LTS), ESM, pnpm                                               |
 | Framework         | NestJS 12 + Express                                                    |
-| Database          | MongoDB via `@nestjs/mongoose` / Mongoose 9                            |
+| Database          | PostgreSQL 18 via Prisma 7 (`@prisma/adapter-pg`), SQL migrations      |
 | Validation        | Zod 4 + `nestjs-zod` — DTOs, env vars and responses share one schema   |
 | Auth              | `@nestjs/passport` + `passport-jwt`, access + refresh tokens as Bearer |
 | Password hashing  | bcrypt behind an upgradable `EncryptionService`                        |
 | Emails            | nodemailer + React Email templates (Maildev locally)                   |
 | Files             | S3-compatible storage (RustFS locally), multipart upload, presigned reads|
 | Rate limiting     | `@nestjs/throttler`                                                    |
-| Health            | `@nestjs/terminus` (MongoDB ping)                                      |
+| Health            | `@nestjs/terminus` (database ping)                                     |
 | Docs              | Swagger UI at `/api/doc` (disabled in production)                      |
 | Tooling           | oxlint, Prettier, Taskfile                                             |
 
 ## Getting started
 
 ```bash
-pnpm install
-docker compose up -d --wait   # MongoDB, Maildev, RustFS (see below)
-pnpm seed                     # drops the DB and inserts the users from src/seed/seed.data.ts
+pnpm install                  # also generates the Prisma Client
+docker compose up -d --wait   # Postgres, Maildev, RustFS (see below)
+pnpm seed                     # applies the migrations, empties the tables, inserts src/seed/seed.data.ts
 pnpm start:dev                # http://localhost:3000/api/v1 — Swagger at /api/doc
 ```
 
@@ -34,7 +34,7 @@ pnpm start:dev                # http://localhost:3000/api/v1 — Swagger at /api
 
 | Service | Image                | Ports                                | Notes                                         |
 | ------- | -------------------- | ------------------------------------ | --------------------------------------------- |
-| MongoDB | `mongo:8.3`          | `27017`                              |                                               |
+| Postgres| `postgres:18.6-alpine` | `5432`                             | `postgres` / `postgres`, DB `nestjs12_boilerplate` |
 | Maildev | `maildev/maildev`    | `1025` SMTP, `1080` inbox UI         | Catches every email sent by the API           |
 | RustFS  | `rustfs/rustfs`      | `9000` S3 API, `9001` console        | S3-compatible storage, `rustfsadmin` / `rustfsadmin` |
 
@@ -52,12 +52,16 @@ Seeded accounts:
 
 | Command           | Description                                            |
 | ----------------- | ------------------------------------------------------ |
-| `task up`         | Start MongoDB, Maildev and RustFS in Docker            |
+| `task up`         | Start Postgres, Maildev and RustFS in Docker           |
 | `task down`       | Stop them (`task reset` also deletes their data)       |
 | `pnpm start:dev`  | Start with file watching                               |
-| `pnpm build`      | Compile to `dist/`                                     |
+| `pnpm build`      | Generate the Prisma Client and compile to `dist/`      |
 | `pnpm start:prod` | Run the compiled app                                   |
-| `pnpm seed`       | **Drop the database**, recreate indexes, insert seeds  |
+| `pnpm db:migrate` | Create + apply a migration from `prisma/schema.prisma` |
+| `pnpm db:deploy`  | Apply pending migrations (CI / production)             |
+| `pnpm db:generate`| Regenerate the Prisma Client                           |
+| `pnpm db:studio`  | Open Prisma Studio                                     |
+| `pnpm seed`       | Apply migrations, **empty every table**, insert seeds  |
 | `pnpm lint`       | oxlint (type-aware)                                    |
 | `pnpm format`     | Prettier                                               |
 
@@ -76,8 +80,7 @@ refuses to boot with a clear error if anything is missing or malformed.
 | `NODE_ENV`                    | —       | `development` \| `staging` \| `production`             |
 | `CORS_ORIGINS`                | `""`    | Comma-separated allowed origins. Empty = CORS disabled |
 | `CLIENT_URL`                  | —       | Front-end base URL, used to build links in emails      |
-| `DATABASE_URL`                | —       | MongoDB connection string                              |
-| `DATABASE_NAME`               | —       |                                                        |
+| `DATABASE_URL`                | —       | PostgreSQL connection string (also read by the Prisma CLI through [prisma.config.ts](prisma.config.ts)) |
 | `JWT_ACCESS_TOKEN_SECRET`     | —       | At least 32 characters                                 |
 | `JWT_ACCESS_TOKEN_EXPIRATION` | `900`   | Seconds. Short: an access token cannot be revoked      |
 | `JWT_REFRESH_TOKEN_SECRET`    | —       | At least 32 characters, different from the access one  |
@@ -100,15 +103,20 @@ fully typed: `config.get<JwtConfig>('JWT').ACCESS_TOKEN_SECRET`.
 ## Project layout
 
 ```
+prisma/
+├── schema.prisma      # models, enums, relations: the source of truth
+└── migrations/        # SQL migrations, committed
 src/
+├── _generated/prisma/ # generated Prisma Client (gitignored)
 ├── _utils/            # cross-cutting: env config, filters, regex
 ├── auth/              # register / login, JWT strategy, guard, decorators
 ├── encryption/        # password hashing (see below)
 ├── health/            # GET /health
 ├── emails/            # nodemailer + React Email templates
-├── s3/                # S3 client, FormDataRequest/uploadedFile helpers, S3File sub-document
+├── prisma/            # PrismaService (PrismaClient + pg adapter, connect/disconnect)
+├── s3/                # S3 client, FormDataRequest/uploadedFile helpers, S3File types
 ├── seed/              # pnpm seed
-├── users/             # users module (schema, repository, service, mapper)
+├── users/             # users module (repository, service, mapper, types)
 ├── app.module.ts
 └── main.ts
 ```
@@ -121,13 +129,45 @@ users/
 │   ├── dtos/requests/     # Zod schemas + createZodDto
 │   ├── dtos/responses/
 │   ├── errors/            # injectable exceptions catalogue
-│   └── types/
+│   └── types/             # user.type.ts (include + UserRecord), enums
 ├── users.controller.ts    # only delegates to the service
 ├── users.service.ts       # business logic, returns DTOs to controllers
-├── users.repository.ts    # Mongoose queries
-├── users.mapper.ts        # Document -> DTO
-├── users.schema.ts
+├── users.repository.ts    # Prisma queries
+├── users.mapper.ts        # Record -> DTO
 └── users.module.ts
+```
+
+## Database (Prisma)
+
+The schema lives in [prisma/schema.prisma](prisma/schema.prisma): `users`,
+`action_tokens` (email verification / password reset) and `s3_files`. The
+client is generated into `src/_generated/prisma` and injected through
+`PrismaService`; only repositories use it.
+
+Row types are never written by hand, they are derived from an `include`
+declared once per model:
+
+```ts
+// src/users/_utils/types/user.type.ts
+export const userInclude = {
+  profilePicture: true,
+} as const satisfies Prisma.UserInclude;
+
+export type UserRecord = Prisma.UserGetPayload<{
+  include: typeof userInclude;
+}>;
+```
+
+Every repository method passes `include: userInclude`, so what services and
+controllers receive is always exactly a `UserRecord`. Enums (`UserRoleEnum`,
+`ActionTokenTypeEnum`) are declared in the schema and re-exported from
+`_utils/types/*.enum.ts`.
+
+Changing the schema:
+
+```bash
+pnpm db:migrate --name add_orders   # writes prisma/migrations/<ts>_add_orders, applies it, regenerates the client
+pnpm db:deploy                      # in CI / production: apply pending migrations only
 ```
 
 ## Validation & typesafety
@@ -146,7 +186,7 @@ export class CreateUserDto extends createZodDto(createUserSchema) {}
 - `ZodValidationPipe` (global) validates `@Body()`, `@Query()`, `@Param()`.
   Unknown keys are rejected thanks to `strictObject`.
 - `@ZodResponse({ type: GetUserDto })` on a route sets the TypeScript return
-  type, the runtime serialisation (extra fields are stripped, so a document's
+  type, the runtime serialisation (extra fields are stripped, so a record's
   `password` can never leak) and the Swagger schema in one place. Returning
   the wrong shape is a compile error.
 - `.meta({ example, description })` feeds Swagger.
@@ -164,16 +204,17 @@ export class CreateUserDto extends createZodDto(createUserSchema) {}
   session is revoked and the user must log in again.
 - `POST /auth/logout` (access token) revokes the refresh token.
 - Single device: logging in from another device replaces the previous refresh
-  token. Switch `hashedRefreshToken` for a `sessions` collection if you need
+  token. Switch `hashedRefreshToken` for a `sessions` table if you need
   concurrent devices.
 - **Every route is protected by default** (`JwtAuthGuard` registered as
   `APP_GUARD`). Opt out with `@Public()` on a route or a whole controller.
 - Restrict a route to one or more roles with `@Protect(UserRoleEnum.ADMIN)`.
   Wrong role → `403 INSUFFICIENT_ROLE`.
-- `@ConnectedUser()` injects the authenticated `UserDocument`. The user is
+- `@ConnectedUser()` injects the authenticated `UserRecord`. The user is
   loaded from the database on every request, so a deleted user or a role
   change is effective immediately.
-- Roles live in [src/users/_utils/types/user-role.enum.ts](src/users/_utils/types/user-role.enum.ts).
+- Roles are the `UserRoleEnum` of [prisma/schema.prisma](prisma/schema.prisma),
+  re-exported from [src/users/_utils/types/user-role.enum.ts](src/users/_utils/types/user-role.enum.ts).
 
 ### Email verification & password reset
 
@@ -187,8 +228,10 @@ export class CreateUserDto extends createZodDto(createUserSchema) {}
 
 Tokens are random 256-bit strings sent in the email link
 (`CLIENT_URL/verify-email?token=…`, `CLIENT_URL/reset-password?token=…`),
-stored as SHA-256 on the user with an expiry (24 h / 1 h, see
-[auth.constants.ts](src/auth/_utils/auth.constants.ts)) and single-use.
+stored as SHA-256 in `action_tokens` (one per user and type, so a new email
+replaces the previous token) with an expiry (24 h / 1 h, see
+[auth.constants.ts](src/auth/_utils/auth.constants.ts)) and single-use:
+consuming one updates the user and deletes the token in the same write.
 Login is not blocked for unverified emails; `GetUserDto.isEmailVerified`
 lets the client decide what to gate.
 
@@ -204,7 +247,7 @@ JSX, add a `sendXxx` method on `EmailsService`.
 @Controller('users')
 export class UsersController {
   @Get('me')                           // any authenticated user
-  getMe(@ConnectedUser() user: UserDocument) { … }
+  getMe(@ConnectedUser() user: UserRecord) { … }
 
   @Get()
   @Protect(UserRoleEnum.ADMIN)          // admins only
@@ -266,17 +309,18 @@ fields, cross-field `.refine()`s and `strictObject` apply as usual.
 
 Storage: `S3Service.uploadFile(file, folder)` puts the object in the bucket
 (folder layout in [s3-keys.mapper.ts](src/s3/s3-keys.mapper.ts)) and returns
-an `S3File` (`key`, `fileName`, `mimeType`, `size`) to embed on the owning
-document — no `files` collection, no references. `S3Mapper.toGetS3FileDto`
+an `S3FileInput` (`key`, `fileName`, `mimeType`, `size`). The owner stores it
+as a row of `s3_files` referenced by a unique FK (`users.profilePictureId`),
+written with a nested `upsert` and removed with a nested `delete`. `S3Mapper.toGetS3FileDto`
 turns it into `{ url, fileName, mimeType, size }` with a presigned URL
 (15 min).
 
 `PUT /users/me/profile-picture` is the shipped example: single required
 image, previous object deleted on replace, `GetUserDto.profilePictureUrl` as
-a presigned URL or `null`. `objectIdSchema`
-([object-id.schema.ts](src/_utils/schemas/object-id.schema.ts)) is there for
-`@Param()` DTOs so a malformed id yields a 400 instead of a Mongoose
-`CastError`.
+a presigned URL or `null`. `uuidSchema`
+([uuid.schema.ts](src/_utils/schemas/uuid.schema.ts)) is there for
+`@Param()` DTOs so a malformed id yields a 400 instead of a Postgres
+`uuid` cast error.
 
 ## Rate limiting
 
@@ -286,7 +330,7 @@ Override per controller or route with `@Throttle()` / `@SkipThrottle()`.
 
 ## Health check
 
-`GET /api/v1/health` (public, not rate-limited) pings MongoDB and answers
+`GET /api/v1/health` (public, not rate-limited) pings Postgres and answers
 `200` or `503` with details, in the Terminus format expected by most
 orchestrators.
 
@@ -307,7 +351,7 @@ orchestrators.
 | Email already registered     | 409    | `{ message: "EMAIL_ALREADY_USED" }`                   |
 | Duplicate key at DB level    | 409    | `{ message: "DUPLICATE_KEY" }`                        |
 | Rate limit exceeded          | 429    | `{ message: "ThrottlerException: Too Many Requests" }`|
-| Unexpected MongoDB error     | 500    | `{ message: "INTERNAL_SERVER_ERROR" }` (details logged)|
+| Unexpected Prisma error      | 500    | `{ message: "INTERNAL_SERVER_ERROR" }` (details logged)|
 
 Module-specific error messages are declared as injectable catalogues
 (`UsersExceptions`, `AuthExceptions`) so they are easy to find and reuse.
@@ -318,6 +362,8 @@ Module-specific error messages are declared as injectable catalogues
 nest g module orders && nest g controller orders && nest g service orders
 ```
 
-Then mirror the `users` layout: schema, repository, mapper, DTOs in
-`_utils/dtos`, exceptions in `_utils/errors`. Routes are protected by default;
+Then add the model to `prisma/schema.prisma`, run `pnpm db:migrate --name
+<name>`, and mirror the `users` layout: include + `XRecord` in
+`_utils/types/<model>.type.ts`, repository, mapper, DTOs in `_utils/dtos`,
+exceptions in `_utils/errors`. Routes are protected by default;
 add `@Public()` or `@Protect(role)` as needed.

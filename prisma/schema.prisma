@@ -1,0 +1,68 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/_generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum UserRoleEnum {
+  USER
+  ADMIN
+
+  @@map("user_role")
+}
+
+enum ActionTokenTypeEnum {
+  EMAIL_VERIFICATION
+  PASSWORD_RESET
+
+  @@map("action_token_type")
+}
+
+model User {
+  id                 String        @id @default(uuid(7)) @db.Uuid
+  firstName          String
+  lastName           String
+  email              String        @unique
+  isEmailVerified    Boolean       @default(false)
+  password           String
+  role               UserRoleEnum  @default(USER)
+  hashedRefreshToken String?
+  profilePictureId   String?       @unique @db.Uuid
+  profilePicture     S3File?       @relation("UserProfilePicture", fields: [profilePictureId], references: [id], onDelete: SetNull)
+  actionTokens       ActionToken[]
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  @@map("users")
+}
+
+model ActionToken {
+  id        String              @id @default(uuid(7)) @db.Uuid
+  type      ActionTokenTypeEnum
+  hash      String              @unique
+  expiresAt DateTime
+  userId    String              @db.Uuid
+  user      User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime            @default(now())
+
+  @@unique([userId, type])
+  @@map("action_tokens")
+}
+
+model S3File {
+  id                 String   @id @default(uuid(7)) @db.Uuid
+  key                String   @unique
+  fileName           String
+  mimeType           String
+  size               Int
+  userProfilePicture User?    @relation("UserProfilePicture")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@map("s3_files")
+}

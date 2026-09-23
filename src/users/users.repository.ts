@@ -1,83 +1,143 @@
 import { Injectable } from '@nestjs/common';
-import { ActionToken, User, UserDocument } from './users.schema.js';
-import { Model } from 'mongoose';
-import { S3File } from '../s3/s3-file.schema.js';
-import { InjectModel } from '@nestjs/mongoose';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { UsersExceptions } from './_utils/errors/users-exceptions.types.js';
+import {
+  userInclude,
+  type UserInput,
+  type UserRecord,
+} from './_utils/types/user.type.js';
+import {
+  actionTokenInclude,
+  type ActionTokenInput,
+  type ActionTokenRecord,
+} from './_utils/types/action-token.type.js';
+import { ActionTokenTypeEnum } from './_utils/types/action-token-type.enum.js';
+import type { S3FileInput } from '../s3/_utils/types/s3-file.type.js';
 
 @Injectable()
 export class UsersRepository {
   constructor(
-    @InjectModel(User.name) private readonly userModel: Model<UserDocument>,
+    private readonly prisma: PrismaService,
     private readonly exceptions: UsersExceptions,
   ) {}
 
-  create = (user: User): Promise<UserDocument> => this.userModel.create(user);
+  create = (user: UserInput): Promise<UserRecord> =>
+    this.prisma.user.create({
+      data: { ...user, email: this.normalizeEmail(user.email) },
+      include: userInclude,
+    });
 
-  findAll = (): Promise<UserDocument[]> => this.userModel.find().exec();
+  findAll = (): Promise<UserRecord[]> =>
+    this.prisma.user.findMany({
+      include: userInclude,
+      orderBy: { createdAt: 'asc' },
+    });
 
-  findById = (id: string): Promise<UserDocument> =>
-    this.userModel.findById(id).orFail(this.exceptions.USER_NOT_FOUND).exec();
+  async findById(id: string): Promise<UserRecord> {
+    const user = await this.findByIdOrNull(id);
+    if (!user) throw this.exceptions.USER_NOT_FOUND;
+    return user;
+  }
 
-  findByIdOrNull = (id: string): Promise<UserDocument | null> =>
-    this.userModel.findById(id).exec();
+  findByIdOrNull = (id: string): Promise<UserRecord | null> =>
+    this.prisma.user.findUnique({ where: { id }, include: userInclude });
 
-  findByEmailOrNull = (email: string): Promise<UserDocument | null> =>
-    this.userModel.findOne({ email }).exec();
+  findByEmailOrNull = (email: string): Promise<UserRecord | null> =>
+    this.prisma.user.findUnique({
+      where: { email: this.normalizeEmail(email) },
+      include: userInclude,
+    });
 
-  findByEmailVerificationTokenHashOrNull = (
+  findActionTokenOrNull = (
+    type: ActionTokenTypeEnum,
     hash: string,
-  ): Promise<UserDocument | null> =>
-    this.userModel.findOne({ 'emailVerificationToken.hash': hash }).exec();
-
-  findByPasswordResetTokenHashOrNull = (
-    hash: string,
-  ): Promise<UserDocument | null> =>
-    this.userModel.findOne({ 'passwordResetToken.hash': hash }).exec();
+  ): Promise<ActionTokenRecord | null> =>
+    this.prisma.actionToken.findUnique({
+      where: { hash, type },
+      include: actionTokenInclude,
+    });
 
   updateHashedRefreshToken = (
-    user: UserDocument,
+    id: string,
     hashedRefreshToken: string | null,
-  ): Promise<UserDocument> => {
-    user.hashedRefreshToken = hashedRefreshToken;
-    return user.save();
-  };
+  ): Promise<UserRecord> =>
+    this.prisma.user.update({
+      where: { id },
+      data: { hashedRefreshToken },
+      include: userInclude,
+    });
 
-  updatePassword = (
-    user: UserDocument,
-    hashedPassword: string,
-  ): Promise<UserDocument> => {
-    user.password = hashedPassword;
-    return user.save();
-  };
+  updatePassword = (id: string, hashedPassword: string): Promise<UserRecord> =>
+    this.prisma.user.update({
+      where: { id },
+      data: { password: hashedPassword },
+      include: userInclude,
+    });
 
-  updateEmailVerificationToken = (
-    user: UserDocument,
-    token: ActionToken | null,
-  ): Promise<UserDocument> => {
-    user.emailVerificationToken = token;
-    return user.save();
-  };
+  upsertActionToken = (
+    id: string,
+    type: ActionTokenTypeEnum,
+    token: ActionTokenInput,
+  ): Promise<UserRecord> =>
+    this.prisma.user.update({
+      where: { id },
+      data: {
+        actionTokens: {
+          upsert: {
+            where: { userId_type: { userId: id, type } },
+            create: { type, ...token },
+            update: token,
+          },
+        },
+      },
+      include: userInclude,
+    });
 
-  updatePasswordResetToken = (
-    user: UserDocument,
-    token: ActionToken | null,
-  ): Promise<UserDocument> => {
-    user.passwordResetToken = token;
-    return user.save();
-  };
+  upsertProfilePicture = (
+    id: string,
+    picture: S3FileInput,
+  ): Promise<UserRecord> =>
+    this.prisma.user.update({
+      where: { id },
+      data: {
+        profilePicture: { upsert: { create: picture, update: picture } },
+      },
+      include: userInclude,
+    });
 
-  updateProfilePicture = (
-    user: UserDocument,
-    picture: S3File | null,
-  ): Promise<UserDocument> => {
-    user.profilePicture = picture;
-    return user.save();
-  };
+  deleteProfilePicture = (id: string): Promise<UserRecord> =>
+    this.prisma.user.update({
+      where: { id },
+      data: { profilePicture: { delete: true } },
+      include: userInclude,
+    });
 
-  markEmailVerified = (user: UserDocument): Promise<UserDocument> => {
-    user.isEmailVerified = true;
-    user.emailVerificationToken = null;
-    return user.save();
-  };
+  markEmailVerified = (id: string): Promise<UserRecord> =>
+    this.prisma.user.update({
+      where: { id },
+      data: {
+        isEmailVerified: true,
+        actionTokens: {
+          deleteMany: { type: ActionTokenTypeEnum.EMAIL_VERIFICATION },
+        },
+      },
+      include: userInclude,
+    });
+
+  resetPassword = (id: string, hashedPassword: string): Promise<UserRecord> =>
+    this.prisma.user.update({
+      where: { id },
+      data: {
+        password: hashedPassword,
+        hashedRefreshToken: null,
+        actionTokens: {
+          deleteMany: { type: ActionTokenTypeEnum.PASSWORD_RESET },
+        },
+      },
+      include: userInclude,
+    });
+
+  // Postgres compares text case-sensitively: emails are stored and looked up lowercased.
+  private normalizeEmail = (email: string): string =>
+    email.trim().toLowerCase();
 }

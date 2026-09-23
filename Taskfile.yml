@@ -2,7 +2,7 @@
 version: '3'
 tasks:
   up:
-    desc: Start the local dependencies (MongoDB, Maildev, RustFS)
+    desc: Start the local dependencies (Postgres, Maildev, RustFS)
     cmds:
       - docker compose up -d --wait
 
@@ -31,12 +31,32 @@ tasks:
     cmds:
       - pnpm format
 
+  db:migrate:
+    desc: Create a migration from prisma/schema.prisma changes and apply it (task db:migrate -- --name <name>)
+    cmds:
+      - pnpm db:migrate {{.CLI_ARGS}}
+
+  db:deploy:
+    desc: Apply the pending migrations
+    cmds:
+      - pnpm db:deploy
+
+  db:generate:
+    desc: Generate the Prisma Client into src/_generated/prisma
+    cmds:
+      - pnpm db:generate
+
+  db:studio:
+    desc: Open Prisma Studio
+    cmds:
+      - pnpm db:studio
+
   seed:
-    desc: Drop the database and insert the seed data
+    desc: Apply the migrations, empty every table and insert the seed data
     cmds:
       - pnpm seed
 
   build:
-    desc: Build the application
+    desc: Generate the Prisma Client and build the application
     cmds:
-      - nest build
+      - pnpm build

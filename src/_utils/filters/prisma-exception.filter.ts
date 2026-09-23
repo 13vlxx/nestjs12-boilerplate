@@ -6,18 +6,18 @@ import {
   Logger,
 } from '@nestjs/common';
 import type { Response } from 'express';
-import { MongoError } from 'mongodb';
+import { Prisma } from '../../_generated/prisma/client.js';
 
-const DUPLICATE_KEY_CODES = [11000, 11001];
+const UNIQUE_CONSTRAINT_FAILED = 'P2002';
 
-@Catch(MongoError)
-export class MongoDBExceptionFilter implements ExceptionFilter {
-  private readonly logger = new Logger(MongoDBExceptionFilter.name);
+@Catch(Prisma.PrismaClientKnownRequestError)
+export class PrismaExceptionFilter implements ExceptionFilter {
+  private readonly logger = new Logger(PrismaExceptionFilter.name);
 
-  catch(exception: MongoError, host: ArgumentsHost) {
+  catch(exception: Prisma.PrismaClientKnownRequestError, host: ArgumentsHost) {
     const response = host.switchToHttp().getResponse<Response>();
 
-    if (DUPLICATE_KEY_CODES.includes(exception.code as number)) {
+    if (exception.code === UNIQUE_CONSTRAINT_FAILED) {
       return response.status(HttpStatus.CONFLICT).json({
         statusCode: HttpStatus.CONFLICT,
         message: 'DUPLICATE_KEY',
@@ -27,7 +27,7 @@ export class MongoDBExceptionFilter implements ExceptionFilter {
 
     // Anything else is unexpected: log the details, never leak them to the client.
     this.logger.error(
-      `Unhandled MongoError (code ${exception.code}): ${exception.message}`,
+      `Unhandled Prisma error (code ${exception.code}): ${exception.message}`,
       exception.stack,
     );
     return response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({

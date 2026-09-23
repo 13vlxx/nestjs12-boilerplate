@@ -15,7 +15,7 @@ import {
   EMAIL_VERIFICATION_TOKEN_TTL_MS,
   PASSWORD_RESET_TOKEN_TTL_MS,
 } from '../auth/_utils/auth.constants.js';
-import type { UserDocument } from '../users/users.schema.js';
+import type { UserRecord } from '../users/_utils/types/user.type.js';
 
 @Injectable()
 export class EmailsService {
@@ -31,7 +31,7 @@ export class EmailsService {
     this.clientUrl = configService.get<ServerConfig>('SERVER').CLIENT_URL;
   }
 
-  sendEmailVerification(user: UserDocument, token: string): Promise<void> {
+  sendEmailVerification(user: UserRecord, token: string): Promise<void> {
     return this.send(
       user.email,
       'Verify your email address',
@@ -43,7 +43,7 @@ export class EmailsService {
     );
   }
 
-  sendPasswordReset(user: UserDocument, token: string): Promise<void> {
+  sendPasswordReset(user: UserRecord, token: string): Promise<void> {
     return this.send(
       user.email,
       'Reset your password',
