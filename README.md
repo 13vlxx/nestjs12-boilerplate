@@ -50,20 +50,20 @@ Seeded accounts:
 
 ### Scripts
 
-| Command           | Description                                            |
-| ----------------- | ------------------------------------------------------ |
-| `task up`         | Start Postgres, Maildev and RustFS in Docker           |
-| `task down`       | Stop them (`task reset` also deletes their data)       |
-| `pnpm start:dev`  | Start with file watching                               |
-| `pnpm build`      | Generate the Prisma Client and compile to `dist/`      |
-| `pnpm start:prod` | Run the compiled app                                   |
-| `pnpm db:migrate` | Create + apply a migration from `prisma/schema.prisma` |
-| `pnpm db:deploy`  | Apply pending migrations (CI / production)             |
-| `pnpm db:generate`| Regenerate the Prisma Client                           |
-| `pnpm db:studio`  | Open Prisma Studio                                     |
-| `pnpm seed`       | Apply migrations, **empty every table**, insert seeds  |
-| `pnpm lint`       | oxlint (type-aware)                                    |
-| `pnpm format`     | Prettier                                               |
+| Command                | Description                                            |
+| ---------------------- | ------------------------------------------------------ |
+| `task up`              | Start Postgres, Maildev and RustFS in Docker           |
+| `task down`            | Stop them (`task reset` also deletes their data)       |
+| `pnpm start:dev`       | Start with file watching                               |
+| `pnpm build`           | Generate the Prisma Client and compile to `dist/`      |
+| `pnpm start:prod`      | Run the compiled app                                   |
+| `pnpm prisma:migrate`  | Create + apply a migration from `prisma/schema.prisma` |
+| `pnpm prisma:deploy`   | Apply pending migrations (CI / production)             |
+| `pnpm prisma:generate` | Regenerate the Prisma Client                           |
+| `pnpm prisma:studio`   | Open Prisma Studio                                     |
+| `pnpm seed`            | Apply migrations, **empty every table**, insert seeds  |
+| `pnpm lint`            | oxlint (type-aware)                                    |
+| `pnpm format`          | Prettier                                               |
 
 The same commands are exposed through [Taskfile.yml](Taskfile.yml) (`task dev`, `task seed`, …).
 
@@ -166,8 +166,8 @@ controllers receive is always exactly a `UserRecord`. Enums (`UserRoleEnum`,
 Changing the schema:
 
 ```bash
-pnpm db:migrate --name add_orders   # writes prisma/migrations/<ts>_add_orders, applies it, regenerates the client
-pnpm db:deploy                      # in CI / production: apply pending migrations only
+pnpm prisma:migrate --name add_orders # writes prisma/migrations/<ts>_add_orders, applies it, regenerates the client
+pnpm prisma:deploy                    # in CI / production: apply pending migrations only
 ```
 
 ## Validation & typesafety
@@ -362,7 +362,7 @@ Module-specific error messages are declared as injectable catalogues
 nest g module orders && nest g controller orders && nest g service orders
 ```
 
-Then add the model to `prisma/schema.prisma`, run `pnpm db:migrate --name
+Then add the model to `prisma/schema.prisma`, run `pnpm prisma:migrate --name
 <name>`, and mirror the `users` layout: include + `XRecord` in
 `_utils/types/<model>.type.ts`, repository, mapper, DTOs in `_utils/dtos`,
 exceptions in `_utils/errors`. Routes are protected by default;

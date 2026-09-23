@@ -31,25 +31,25 @@ tasks:
     cmds:
       - pnpm format
 
-  db:migrate:
-    desc: Create a migration from prisma/schema.prisma changes and apply it (task db:migrate -- --name <name>)
+  prisma:migrate:
+    desc: Create a migration from prisma/schema.prisma changes and apply it (task prisma:migrate -- --name <name>)
     cmds:
-      - pnpm db:migrate {{.CLI_ARGS}}
+      - pnpm prisma:migrate {{.CLI_ARGS}}
 
-  db:deploy:
+  prisma:deploy:
     desc: Apply the pending migrations
     cmds:
-      - pnpm db:deploy
+      - pnpm prisma:deploy
 
-  db:generate:
+  prisma:generate:
     desc: Generate the Prisma Client into src/_generated/prisma
     cmds:
-      - pnpm db:generate
+      - pnpm prisma:generate
 
-  db:studio:
+  prisma:studio:
     desc: Open Prisma Studio
     cmds:
-      - pnpm db:studio
+      - pnpm prisma:studio
 
   seed:
     desc: Apply the migrations, empty every table and insert the seed data

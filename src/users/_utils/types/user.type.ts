@@ -7,8 +7,3 @@ export const userInclude = {
 export type UserRecord = Prisma.UserGetPayload<{
   include: typeof userInclude;
 }>;
-
-export type UserInput = Pick<
-  Prisma.UserCreateInput,
-  'firstName' | 'lastName' | 'email' | 'password' | 'role' | 'isEmailVerified'
->;

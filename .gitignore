@@ -1,7 +1,7 @@
 # compiled output
 /dist
 
-# Prisma Client (pnpm db:generate)
+# Prisma Client (pnpm prisma:generate)
 /src/_generated
 /node_modules
 /build

@@ -17,14 +17,14 @@ React Email · S3 (`@aws-sdk/client-s3`) · `@nestjs/throttler` ·
 docker compose up -d --wait   # Postgres :5432, Maildev :1025/:1080, RustFS :9000/:9001
 pnpm start:dev                # http://localhost:3000/api/v1, Swagger at /api/doc
 pnpm build && pnpm lint && pnpm format   # must all pass before you are done
-pnpm db:migrate --name <name> # after editing prisma/schema.prisma: writes + applies a migration
+pnpm prisma:migrate --name <name>  # after editing prisma/schema.prisma: writes + applies a migration
 pnpm seed                     # applies migrations, TRUNCATES every table, inserts src/seed/seed.data.ts
 ```
 
 There are no automated tests in this repo (by choice). Verify changes by
 building, then exercising the routes with curl or Swagger against the Docker
 services. Use a throwaway database (`DATABASE_URL=…/tmp_db`, then
-`pnpm db:deploy`) and `S3_BUCKET` when scripting, and drop them afterwards.
+`pnpm prisma:deploy`) and `S3_BUCKET` when scripting, and drop them afterwards.
 
 ## Module layout
 
@@ -83,10 +83,10 @@ regular methods when there is a body.
 
 - `prisma/schema.prisma` is the source of truth. Tables are `@@map`ped to
   plural snake_case, ids are `String @id @default(uuid(7)) @db.Uuid`. Change
-  it, then `pnpm db:migrate --name <what>` and commit the migration folder.
+  it, then `pnpm prisma:migrate --name <what>` and commit the migration folder.
   Never edit an applied migration.
 - The client is generated into `src/_generated/prisma` (gitignored, rebuilt by
-  `postinstall` / `pnpm build` / `pnpm db:generate`). Import from
+  `postinstall` / `pnpm build` / `pnpm prisma:generate`). Import from
   `…/_generated/prisma/client.js` (or `enums.js`), never from
   `@prisma/client`, and never edit it.
 - Inject `PrismaService` (from `PrismaModule`); never `new PrismaClient()`.
@@ -101,8 +101,6 @@ regular methods when there is a body.
   export type UserRecord = Prisma.UserGetPayload<{
     include: typeof userInclude;
   }>;
-
-  export type UserInput = Pick<Prisma.UserCreateInput, 'firstName' | …>;
   ```
 
   Every repository read/write passes `include: userInclude` so it returns a

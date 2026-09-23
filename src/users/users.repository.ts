@@ -1,17 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { UsersExceptions } from './_utils/errors/users-exceptions.types.js';
-import {
-  userInclude,
-  type UserInput,
-  type UserRecord,
-} from './_utils/types/user.type.js';
+import { userInclude, type UserRecord } from './_utils/types/user.type.js';
 import {
   actionTokenInclude,
   type ActionTokenInput,
   type ActionTokenRecord,
 } from './_utils/types/action-token.type.js';
 import { ActionTokenTypeEnum } from './_utils/types/action-token-type.enum.js';
+import type { UserRoleEnum } from './_utils/types/user-role.enum.js';
+import type { CreateUserDto } from './_utils/dtos/requests/create-user.dto.js';
 import type { S3FileInput } from '../s3/_utils/types/s3-file.type.js';
 
 @Injectable()
@@ -21,9 +19,21 @@ export class UsersRepository {
     private readonly exceptions: UsersExceptions,
   ) {}
 
-  create = (user: UserInput): Promise<UserRecord> =>
+  create = (
+    dto: CreateUserDto,
+    hashedPassword: string,
+    role: UserRoleEnum,
+    isEmailVerified: boolean,
+  ): Promise<UserRecord> =>
     this.prisma.user.create({
-      data: { ...user, email: this.normalizeEmail(user.email) },
+      data: {
+        firstName: dto.firstName,
+        lastName: dto.lastName,
+        email: this.normalizeEmail(dto.email),
+        password: hashedPassword,
+        role,
+        isEmailVerified,
+      },
       include: userInclude,
     });
 

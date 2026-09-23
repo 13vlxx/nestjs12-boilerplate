@@ -17,11 +17,11 @@
     "lint": "oxlint --type-aware src/",
     "seed": "prisma migrate deploy && pnpm build && node dist/seed/seed.js",
     "postinstall": "prisma generate",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "postdb:migrate": "prisma generate",
-    "db:deploy": "prisma migrate deploy",
-    "db:studio": "prisma studio"
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "postprisma:migrate": "prisma generate",
+    "prisma:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1135.0",

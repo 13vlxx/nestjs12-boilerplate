@@ -71,14 +71,8 @@ export class UsersService {
     const existing = await this.repository.findByEmailOrNull(dto.email);
     if (existing) throw this.exceptions.EMAIL_ALREADY_USED;
 
-    return this.repository.create({
-      firstName: dto.firstName,
-      lastName: dto.lastName,
-      email: dto.email,
-      isEmailVerified,
-      password: await this.encryptionService.encrypt(dto.password),
-      role,
-    });
+    const hashedPassword = await this.encryptionService.encrypt(dto.password);
+    return this.repository.create(dto, hashedPassword, role, isEmailVerified);
   }
 
   findById = (id: string): Promise<UserRecord> => this.repository.findById(id);
