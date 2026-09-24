@@ -1,0 +1,33 @@
+type: folder
+model: folder
+id: fl_yVv3G0QyxY
+createdAt: 2026-09-24T12:00:00.000000
+updatedAt: 2026-09-24T12:00:00.000000
+workspaceId: wk_AdUBdJOl2q
+folderId: null
+authentication: {}
+authenticationType: none
+description: |-
+  Needs a private (non-shared) environment with LOGTO_DEV_APP_ID and LOGTO_PAT,
+  both printed by `pnpm seed`. The API folder reuses this token automatically.
+headers: []
+name: Logto
+sortPriority: 1000.0
+settingSendCookies:
+  enabled: false
+  value: true
+settingStoreCookies:
+  enabled: false
+  value: true
+settingValidateCertificates:
+  enabled: false
+  value: true
+settingFollowRedirects:
+  enabled: false
+  value: true
+settingRequestTimeout:
+  enabled: false
+  value: 0
+settingRequestMessageSize:
+  enabled: false
+  value: 67108864

@@ -68,7 +68,6 @@ Seeded Logto accounts:
 | `pnpm build`      | Compile to `dist/`                                                 |
 | `pnpm start:prod` | Run the compiled app                                               |
 | `pnpm seed`       | **Drop MongoDB**, then create what is missing in Logto (idempotent) |
-| `pnpm -s jwt <email>` | Print an access token for that Logto user (dev only)           |
 | `pnpm lint`       | oxlint (type-aware)                                                |
 | `pnpm format`     | Prettier                                                           |
 
@@ -115,6 +114,7 @@ src/
 ├── users/             # /users routes, backed by Logto (no collection)
 ├── app.module.ts
 └── main.ts
+yaak/                  # Yaak workspace (directory sync): every route + the token request
 ```
 
 Each feature module follows the same shape (`users` has no repository nor
@@ -214,18 +214,40 @@ title — `(ALL)` or `(ADMIN)` — so it reads from the collapsed list. Keep
 
 ### Getting a token
 
-```bash
-pnpm -s jwt admin@example.com          # prints the JWT (roles: admin, user)
-pnpm -s jwt john.doe@example.com       # roles: user
+Every seeded user has a Logto **personal access token** (PAT) named `dev`,
+and `pnpm seed` creates a public app, *NestJS Boilerplate - dev tokens*,
+allowed to exchange a PAT for an access token to `LOGTO_API_RESOURCE`
+(token exchange, RFC 8693). The seed prints what you need:
+
+```
+LOGTO_DEV_APP_ID = <app id>
+LOGTO_PAT (admin@example.com) = pat_…
+LOGTO_PAT (john.doe@example.com) = pat_…
 ```
 
-Paste it in Swagger (**Authorize**) or send it as `Authorization: Bearer …`.
-No browser involved: the M2M app asks Logto for a *subject token* for that
-user, and the *NestJS Boilerplate - dev tokens* app (created by `pnpm seed`)
-exchanges it for an access token for `LOGTO_API_RESOURCE` (token exchange,
-RFC 8693). It is the same token the front-end would get — same roles, same
-audience — valid one hour. The script refuses to run in production; don't
-create that app in a production tenant.
+**With Yaak** — the workspace lives in [yaak/](yaak) (*Open workspace* →
+pick the folder, or *Sync to directory*):
+
+1. Create a **private** environment (not shared, so it is never written to
+   `yaak/`) with `LOGTO_DEV_APP_ID` and `LOGTO_PAT`; one per user you want to
+   impersonate (e.g. *admin*, *john*).
+2. Send any request of the *API* folder: its Bearer is
+   `response.body.path()` of *Logto / Get access token*, sent automatically
+   when there is no response yet or the last one is older than 55 min.
+
+**With curl**:
+
+```bash
+curl -s http://localhost:3001/oidc/token \
+  -d grant_type=urn:ietf:params:oauth:grant-type:token-exchange \
+  -d subject_token_type=urn:logto:token-type:personal_access_token \
+  -d client_id=<LOGTO_DEV_APP_ID> -d subject_token=<LOGTO_PAT> \
+  -d resource=http://localhost:3000/api/v1
+```
+
+It is the same access token the front-end would get — same roles, same
+audience — valid one hour. PATs do not expire: never seed a production
+tenant.
 
 ### Users & custom data
 
@@ -253,8 +275,10 @@ Once per environment (the admin console is at <http://localhost:3002>):
 3. **`pnpm seed`**: creates the API resource `LOGTO_API_RESOURCE`, the
    *Custom JWT* script for user access tokens (`roles` claim — it replaces
    any existing script, visible under *Custom JWT* in the console), the
-   `user` (default) and `admin` roles and the seeded users. Re-run it after
-   adding a `UserRoleEnum` value (and add it to `seedRoles`).
+   `user` (default) and `admin` roles, the seeded users with their `dev`
+   personal access tokens and the *dev tokens* app, then prints what Yaak
+   needs (see [Getting a token](#getting-a-token)). Re-run it after adding a
+   `UserRoleEnum` value (and add it to `seedRoles`).
 4. **Applications → your front-end** (e.g. *Single page app*): redirect URIs
    of your front, and `resources: [LOGTO_API_RESOURCE]` in the SDK config.
 5. *Optional* — **Connectors → Email → SMTP**: host `maildev`, port `1025`,

@@ -1,0 +1,38 @@
+type: http_request
+model: http_request
+id: rq_ZYDaBum3tO
+createdAt: 2026-09-24T12:00:00.000000
+updatedAt: 2026-09-24T12:00:00.000000
+workspaceId: wk_AdUBdJOl2q
+folderId: fl_yVv3G0QyxY
+authentication: {}
+authenticationType: null
+body:
+  form:
+  - enabled: true
+    name: grant_type
+    value: urn:ietf:params:oauth:grant-type:token-exchange
+  - enabled: true
+    name: client_id
+    value: ${[ LOGTO_DEV_APP_ID ]}
+  - enabled: true
+    name: subject_token
+    value: ${[ LOGTO_PAT ]}
+  - enabled: true
+    name: subject_token_type
+    value: urn:logto:token-type:personal_access_token
+  - enabled: true
+    name: resource
+    value: ${[ LOGTO_API_RESOURCE ]}
+bodyType: application/x-www-form-urlencoded
+description: Exchanges the personal access token for a one-hour access token to the API.
+headers:
+- enabled: true
+  name: Content-Type
+  value: application/x-www-form-urlencoded
+  id: null
+method: POST
+name: Get access token
+sortPriority: 1000.0
+url: ${[ LOGTO_ENDPOINT ]}/oidc/token
+urlParameters: []

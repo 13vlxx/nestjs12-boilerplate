@@ -2,9 +2,10 @@ import { UserRoleEnum } from '../users/_utils/types/user-role.enum.js';
 
 export const SEED_API_RESOURCE_NAME = 'NestJS Boilerplate API';
 
-// Traditional app allowed to exchange a Management API subject token for a
-// user access token: what `pnpm jwt <email>` uses. Dev only.
+// Public (SPA) app allowed to exchange a user's personal access token for an
+// access token to the API: what the Yaak workspace uses. Dev only.
 export const DEV_TOKEN_APP_NAME = 'NestJS Boilerplate - dev tokens';
+export const DEV_PAT_NAME = 'dev';
 
 // Logto's "Custom JWT" for user access tokens: puts the user's role names in
 // a `roles` claim, read by JwtAuthGuard. It replaces any existing script.

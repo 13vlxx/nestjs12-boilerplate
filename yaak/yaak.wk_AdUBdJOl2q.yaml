@@ -1,0 +1,17 @@
+type: workspace
+model: workspace
+id: wk_AdUBdJOl2q
+createdAt: 2026-09-24T12:00:00.000000
+updatedAt: 2026-09-24T12:00:00.000000
+authentication: {}
+authenticationType: null
+description: 'NestJS 12 boilerplate API. Tokens come from Logto: see the Logto folder.'
+headers: []
+name: NestJS Boilerplate
+encryptionKeyChallenge: null
+settingValidateCertificates: true
+settingFollowRedirects: true
+settingRequestTimeout: 0
+settingDnsOverrides: []
+settingSendCookies: true
+settingStoreCookies: true

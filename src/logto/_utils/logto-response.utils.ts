@@ -19,6 +19,14 @@ export async function unwrap<T>(
   return data;
 }
 
+export async function unwrapEmpty(
+  request: Promise<LogtoResponse<unknown>>,
+): Promise<void> {
+  const { error, response } = await request;
+  if (!response.ok)
+    throw new LogtoRequestError(response.status, response.url, error);
+}
+
 export async function unwrapOrNull<T>(
   request: Promise<LogtoResponse<T>>,
 ): Promise<T | null> {

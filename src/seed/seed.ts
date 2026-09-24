@@ -12,10 +12,11 @@ import type {
 import { NodeEnvEnum } from '../_utils/config/types/node-env.type.js';
 import { LOGTO_MANAGEMENT_API } from '../logto/logto.constants.js';
 import { LogtoService } from '../logto/logto.service.js';
-import { unwrap } from '../logto/_utils/logto-response.utils.js';
+import { unwrap, unwrapEmpty } from '../logto/_utils/logto-response.utils.js';
 import type { LogtoManagementApi } from '../logto/_utils/types/logto.type.js';
 import {
   ACCESS_TOKEN_CLAIMS_SCRIPT,
+  DEV_PAT_NAME,
   DEV_TOKEN_APP_NAME,
   SEED_API_RESOURCE_NAME,
   seedRoles,
@@ -25,7 +26,9 @@ import {
 /**
  * Drops the MongoDB database and recreates its indexes, then makes sure Logto
  * holds the API resource, the access-token claims script (`roles` claim), the
- * roles, the users of seed.data.ts and the app used by `pnpm jwt`. The Logto part is idempotent and never
+ * roles, the users of seed.data.ts, and what the Yaak workspace needs to get
+ * tokens: a public app with token exchange and a personal access token per
+ * user, both printed at the end. The Logto part is idempotent and never
  * deletes anything.
  * Refuses to run in production.
  *
@@ -71,15 +74,20 @@ async function seed() {
     const roleIds = await ensureRoles(api);
     logger.log(`Roles: ${[...roleIds.keys()].join(', ')}`);
 
+    const pats: string[] = [];
     for (const user of seedUsers) {
-      await ensureUser(api, logtoService, user, roleIds);
+      const userId = await ensureUser(api, logtoService, user, roleIds);
       logger.log(`User ${user.email} (${user.roles.join(', ') || 'no role'})`);
+      pats.push(
+        `LOGTO_PAT (${user.email}) = ${await ensureDevPat(api, userId)}`,
+      );
     }
 
-    await ensureDevTokenApp(api);
-    logger.log(`Application "${DEV_TOKEN_APP_NAME}" (pnpm jwt)`);
+    const devAppId = await ensureDevTokenApp(api);
 
-    logger.log('Seed complete');
+    logger.log('Seed complete. Yaak private environment:');
+    logger.log(`LOGTO_DEV_APP_ID = ${devAppId}`);
+    pats.forEach((line) => logger.log(line));
   } finally {
     await app.close();
   }
@@ -140,7 +148,7 @@ async function ensureUser(
   logtoService: LogtoService,
   { email, name, password, roles }: (typeof seedUsers)[number],
   roleIds: Map<string, string>,
-): Promise<void> {
+): Promise<string> {
   const user =
     (await logtoService.findUserByEmailOrNull(email)) ??
     (await unwrap(
@@ -162,21 +170,50 @@ async function ensureUser(
         body: { roleIds: missing },
       }),
     );
+  return user.id;
 }
 
-async function ensureDevTokenApp(api: LogtoManagementApi): Promise<void> {
-  const apps = await unwrap(
-    api.GET('/api/applications', {
-      params: { query: { types: 'Traditional', page_size: 100 } },
+/** Returns the value of the user's `dev` personal access token. */
+async function ensureDevPat(
+  api: LogtoManagementApi,
+  userId: string,
+): Promise<string> {
+  const pats = await unwrap(
+    api.GET('/api/users/{userId}/personal-access-tokens', {
+      params: { path: { userId } },
     }),
   );
-  if (apps.some((app) => app.name === DEV_TOKEN_APP_NAME)) return;
+  const pat =
+    pats.find((candidate) => candidate.name === DEV_PAT_NAME) ??
+    (await unwrap(
+      api.POST('/api/users/{userId}/personal-access-tokens', {
+        params: { path: { userId } },
+        body: { name: DEV_PAT_NAME },
+      }),
+    ));
+  return pat.value;
+}
 
-  await unwrap(
+/** Returns the app id (a public client: it has no secret). */
+async function ensureDevTokenApp(api: LogtoManagementApi): Promise<string> {
+  const apps = await unwrap(
+    api.GET('/api/applications', { params: { query: { page_size: 100 } } }),
+  );
+  const existing = apps.find((app) => app.name === DEV_TOKEN_APP_NAME);
+  if (existing?.type === 'SPA') return existing.id;
+  // Earlier versions created it as a confidential (Traditional) app.
+  if (existing)
+    await unwrapEmpty(
+      api.DELETE('/api/applications/{id}', {
+        params: { path: { id: existing.id } },
+      }),
+    );
+
+  const created = await unwrap(
     api.POST('/api/applications', {
       body: {
         name: DEV_TOKEN_APP_NAME,
-        type: 'Traditional',
+        type: 'SPA',
         oidcClientMetadata: {
           // Never used by the token exchange, but Logto requires one. The
           // generated type wrongly expects objects: the API takes URL strings.
@@ -190,6 +227,7 @@ async function ensureDevTokenApp(api: LogtoManagementApi): Promise<void> {
       },
     }),
   );
+  return created.id;
 }
 
 await seed();

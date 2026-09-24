@@ -1,0 +1,22 @@
+type: http_request
+model: http_request
+id: rq_K3RDcGXgtp
+createdAt: 2026-09-24T12:00:00.000000
+updatedAt: 2026-09-24T12:00:00.000000
+workspaceId: wk_AdUBdJOl2q
+folderId: fl_ik2SjwDSe7
+authentication: {}
+authenticationType: null
+body:
+  form:
+  - enabled: true
+    name: file
+    file: ''
+bodyType: multipart/form-data
+description: 'Pick a JPEG, PNG or WebP image (8 MB max) for the file field'
+headers: []
+method: PUT
+name: Update profile picture
+sortPriority: 3000.0
+url: ${[ API_URL ]}/users/me/profile-picture
+urlParameters: []
