@@ -32,9 +32,9 @@ The Yaak workspace in `yaak/` (directory sync) has one request per route,
 under *NestJS 12 Boilerplate Backend* in one subfolder per module (*Users*,
 *Health*…). Add a request file when you add a route (`folderId` of the
 module's subfolder — create it for a new module — `${[ API_URL ]}` in the
-URL, auth inherited). Shared variables go in the *Localhost* environment;
-never put tokens, PATs or app ids in `yaak/`: they belong in the private
-Global Variables.
+URL, auth inherited). Variables live per environment (*Localhost*: URLs,
+`LOGTO_DEV_APP_ID`, `LOGTO_PAT`), since each Logto instance has its own app
+id and PATs; the committed values stay empty.
 
 ## Module layout
 

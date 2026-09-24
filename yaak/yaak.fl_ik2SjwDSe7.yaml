@@ -1,8 +1,8 @@
 type: folder
 model: folder
 id: fl_ik2SjwDSe7
-createdAt: 2026-09-24T12:00:00.000000
-updatedAt: 2026-09-24T12:00:00.000000
+createdAt: 2026-09-24T12:00:00
+updatedAt: 2026-09-24T20:07:55.319918
 workspaceId: wk_AdUBdJOl2q
 folderId: null
 authentication:
@@ -10,7 +10,7 @@ authentication:
 authenticationType: bearer
 description: Bearer = the access token of Logto / Get access token, re-fetched once it is older than 55 min.
 headers: []
-name: NestJS 12 Boilerplate Backend
+name: Backend
 sortPriority: 2000.0
 settingSendCookies:
   enabled: false
@@ -30,3 +30,6 @@ settingRequestTimeout:
 settingRequestMessageSize:
   enabled: false
   value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

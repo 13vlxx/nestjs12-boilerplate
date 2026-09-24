@@ -1,8 +1,8 @@
 type: folder
 model: folder
 id: fl_1py56UwReC
-createdAt: 2026-09-24T20:10:00.000000
-updatedAt: 2026-09-24T20:10:00.000000
+createdAt: 2026-09-24T20:10:00
+updatedAt: 2026-09-24T20:10:00
 workspaceId: wk_AdUBdJOl2q
 folderId: fl_ik2SjwDSe7
 authentication: {}
@@ -29,3 +29,6 @@ settingRequestTimeout:
 settingRequestMessageSize:
   enabled: false
   value: 67108864
+settingHttpVersion:
+  enabled: false
+  value: auto

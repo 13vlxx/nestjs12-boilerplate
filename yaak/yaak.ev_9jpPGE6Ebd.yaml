@@ -3,7 +3,7 @@ model: environment
 id: ev_9jpPGE6Ebd
 workspaceId: wk_AdUBdJOl2q
 createdAt: 2026-09-24T20:00:04.571607
-updatedAt: 2026-09-24T20:10:00.000000
+updatedAt: 2026-09-24T20:09:16.356027
 name: Localhost
 public: true
 base: false
@@ -22,5 +22,13 @@ variables:
   name: LOGTO_API_RESOURCE
   value: http://localhost:3000/api/v1
   id: 95oGBvJJVW
+- enabled: true
+  name: LOGTO_PAT
+  value: pat_HDSpA0A2uDm2SuEvU4QMST5gmlUL8S9S
+  id: V4aMvq7EsC
+- enabled: true
+  name: LOGTO_CLIENT_ID
+  value: qov4isgq36p051l49gtic
+  id: q9a85ecGb6
 color: var(--info)
 sortPriority: 0.0

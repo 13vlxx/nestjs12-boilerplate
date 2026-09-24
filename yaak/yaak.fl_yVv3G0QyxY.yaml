@@ -8,8 +8,8 @@ folderId: null
 authentication: {}
 authenticationType: none
 description: |-
-  Needs a private (non-shared) environment with LOGTO_DEV_APP_ID and LOGTO_PAT,
-  both printed by `pnpm seed`. The API folder reuses this token automatically.
+  Needs LOGTO_DEV_APP_ID and LOGTO_PAT in the active environment (Localhost:
+  printed by `pnpm seed`). The backend folder reuses this token automatically.
 headers: []
 name: Logto
 sortPriority: 1000.0
