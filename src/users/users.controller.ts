@@ -8,7 +8,7 @@ import { UpdateProfilePictureDto } from './_utils/dtos/requests/update-profile-p
 import { PROFILE_PICTURE_MAX_SIZE } from './_utils/users.constants.js';
 import { Protect } from '../auth/_utils/decorators/protect.decorator.js';
 import { ConnectedUser } from '../auth/_utils/decorators/connected-user.decorator.js';
-import { ScopeEnum } from '../auth/_utils/types/scope.enum.js';
+import { UserRoleEnum } from './_utils/types/user-role.enum.js';
 import type { AuthUser } from '../auth/_utils/types/auth-user.type.js';
 import { FormDataRequest } from '../s3/_utils/decorators/form-data-request.decorator.js';
 
@@ -49,7 +49,7 @@ export class UsersController {
   }
 
   @Get()
-  @Protect(ScopeEnum.READ_USERS)
+  @Protect(UserRoleEnum.ADMIN)
   @ApiOperation({ summary: 'List users' })
   @ZodResponse({ type: [GetUserDto] })
   findAll(@Query() query: FindUsersQueryDto): Promise<GetUserDto[]> {

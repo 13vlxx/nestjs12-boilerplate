@@ -17,7 +17,7 @@ the Management API) · S3 (`@aws-sdk/client-s3`) · `@nestjs/throttler` ·
 docker compose up -d --wait   # MongoDB :27018, Logto :3001/:3002, Maildev :1025/:1080, RustFS :9000/:9001
 pnpm start:dev                # http://localhost:3000/api/v1, Swagger at /api/doc, Scalar at /api/doc-scalar
 pnpm build && pnpm lint && pnpm format   # must all pass before you are done
-pnpm seed                     # DROPS MongoDB; creates missing API resource/permissions/roles/users in Logto
+pnpm seed                     # DROPS MongoDB; creates missing API resource/roles/users + roles JWT script in Logto
 ```
 
 There are no automated tests in this repo (by choice). Verify changes by
@@ -113,20 +113,22 @@ regular methods when there is a body.
   (issuer `<LOGTO_ENDPOINT>/oidc`, audience `LOGTO_API_RESOURCE`). Never call
   Logto from the guard: one HTTP call per request is what this design avoids.
   `@Public()` opts out.
-- Authorization = permissions of the API resource. Add the value to
-  `ScopeEnum`, run `pnpm seed` (creates it in Logto and grants it to
-  `admin`), then `@Protect(ScopeEnum.X)` (all listed scopes required). Don't
-  check roles in code; roles only group permissions in Logto.
+- Authorization = Logto user roles, read from the access token's `roles`
+  claim (added by the *Custom JWT* script that `pnpm seed` installs). New
+  role: add it to `UserRoleEnum` and `seedRoles`, run `pnpm seed`, then
+  `@Protect(UserRoleEnum.X)` (any of the listed roles). Never fetch roles
+  from the Management API in the guard.
 - Every non-public route declares its access explicitly: `@Protect()` (any
-  authenticated user) or `@Protect(ScopeEnum.X)`. Scopes on the controller
-  and the route add up (`getAllAndMerge`).
-- `@ConnectedUser() user: AuthUser` gives `{ id, scopes }` from the token.
+  authenticated user) or `@Protect(UserRoleEnum.X, …)`. Roles on a route
+  replace the controller's; a bare `@Protect()` sets no metadata, so it
+  never loosens a controller-level restriction.
+- `@ConnectedUser() user: AuthUser` gives `{ id, roles }` from the token.
   Load the Logto user (`UsersService.findById`) only in routes that need it.
 - Every route has `@ApiOperation({ summary })`, placed **below** `@Protect`:
-  `@Protect` appends `(ALL)` / `(read:users)` to that summary when it runs,
-  and decorators apply bottom-up. Don't write the label by hand.
+  `@Protect` appends `(ALL)` / `(ADMIN)` to that summary when it runs, and
+  decorators apply bottom-up. Don't write the label by hand.
 - `@Public()` / `@Protect()` document access themselves (no bearer / `401` /
-  `403` with the scopes); don't hand-write those responses and don't
+  `403` with the roles); don't hand-write those responses and don't
   post-process the OpenAPI document (only `cleanupOpenApiDoc`).
 
 ## Logto

@@ -13,13 +13,18 @@ import { NodeEnvEnum } from '../_utils/config/types/node-env.type.js';
 import { LOGTO_MANAGEMENT_API } from '../logto/logto.constants.js';
 import { unwrap } from '../logto/_utils/logto-response.utils.js';
 import type { LogtoManagementApi } from '../logto/_utils/types/logto.type.js';
-import { ScopeEnum } from '../auth/_utils/types/scope.enum.js';
-import { SEED_API_RESOURCE_NAME, seedRoles, seedUsers } from './seed.data.js';
+import {
+  ACCESS_TOKEN_CLAIMS_SCRIPT,
+  SEED_API_RESOURCE_NAME,
+  seedRoles,
+  seedUsers,
+} from './seed.data.js';
 
 /**
  * Drops the MongoDB database and recreates its indexes, then makes sure Logto
- * holds the API resource, its permissions (ScopeEnum), the roles and the users
- * of seed.data.ts. The Logto part is idempotent and never deletes anything.
+ * holds the API resource, the access-token claims script (`roles` claim), the
+ * roles and the users of seed.data.ts. The Logto part is idempotent and never
+ * deletes anything.
  * Refuses to run in production.
  *
  *   pnpm seed
@@ -49,10 +54,18 @@ async function seed() {
     const api = app.get<LogtoManagementApi>(LOGTO_MANAGEMENT_API);
     const indicator = config.get<LogtoConfig>('LOGTO').API_RESOURCE;
 
-    const scopeIds = await ensureApiResource(api, indicator);
-    logger.log(`API resource ${indicator} with ${scopeIds.size} permission(s)`);
+    await ensureApiResource(api, indicator);
+    logger.log(`API resource ${indicator}`);
 
-    const roleIds = await ensureRoles(api, scopeIds);
+    await unwrap(
+      api.PUT('/api/configs/jwt-customizer/{tokenTypePath}', {
+        params: { path: { tokenTypePath: 'access-token' } },
+        body: { script: ACCESS_TOKEN_CLAIMS_SCRIPT },
+      }),
+    );
+    logger.log('Access-token claims script (roles)');
+
+    const roleIds = await ensureRoles(api);
     logger.log(`Roles: ${[...roleIds.keys()].join(', ')}`);
 
     for (const user of seedUsers) {
@@ -66,42 +79,23 @@ async function seed() {
   }
 }
 
-/** Returns the permission ids by name. */
 async function ensureApiResource(
   api: LogtoManagementApi,
   indicator: string,
-): Promise<Map<string, string>> {
-  const resources = await unwrap(
-    api.GET('/api/resources', { params: { query: { includeScopes: 'true' } } }),
-  );
-  const resource =
-    resources.find((r) => r.indicator === indicator) ??
-    (await unwrap(
-      api.POST('/api/resources', {
-        body: { name: SEED_API_RESOURCE_NAME, indicator },
-      }),
-    ));
+): Promise<void> {
+  const resources = await unwrap(api.GET('/api/resources'));
+  if (resources.some((resource) => resource.indicator === indicator)) return;
 
-  const scopeIds = new Map(
-    (resource.scopes ?? []).map((scope) => [scope.name, scope.id]),
+  await unwrap(
+    api.POST('/api/resources', {
+      body: { name: SEED_API_RESOURCE_NAME, indicator },
+    }),
   );
-  for (const name of Object.values(ScopeEnum)) {
-    if (scopeIds.has(name)) continue;
-    const scope = await unwrap(
-      api.POST('/api/resources/{resourceId}/scopes', {
-        params: { path: { resourceId: resource.id } },
-        body: { name },
-      }),
-    );
-    scopeIds.set(name, scope.id);
-  }
-  return scopeIds;
 }
 
 /** Returns the role ids by name. */
 async function ensureRoles(
   api: LogtoManagementApi,
-  scopeIds: Map<string, string>,
 ): Promise<Map<string, string>> {
   const existing = await unwrap(
     api.GET('/api/roles', {
@@ -110,29 +104,24 @@ async function ensureRoles(
   );
   const roleIds = new Map<string, string>();
 
-  for (const { name, description, scopes } of seedRoles) {
-    const wanted = scopes.map((scope) => scopeIds.get(scope)!);
+  for (const { name, description, isDefault } of seedRoles) {
     const role = existing.find((r) => r.name === name);
 
     if (!role) {
       const created = await unwrap(
         api.POST('/api/roles', {
-          body: { name, description, type: 'User', scopeIds: wanted },
+          body: { name, description, type: 'User', isDefault },
         }),
       );
       roleIds.set(name, created.id);
       continue;
     }
 
-    const granted = await unwrap(
-      api.GET('/api/roles/{id}/scopes', { params: { path: { id: role.id } } }),
-    );
-    const missing = wanted.filter((id) => !granted.some((s) => s.id === id));
-    if (missing.length)
+    if (role.isDefault !== isDefault)
       await unwrap(
-        api.POST('/api/roles/{id}/scopes', {
+        api.PATCH('/api/roles/{id}', {
           params: { path: { id: role.id } },
-          body: { scopeIds: missing },
+          body: { isDefault },
         }),
       );
     roleIds.set(name, role.id);

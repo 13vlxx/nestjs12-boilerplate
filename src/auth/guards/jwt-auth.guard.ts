@@ -13,21 +13,21 @@ import type {
   LogtoConfig,
 } from '../../_utils/config/env.config.js';
 import { IS_PUBLIC_KEY } from '../_utils/decorators/public.decorator.js';
-import { SCOPES_KEY } from '../_utils/decorators/protect.decorator.js';
+import { ROLES_KEY } from '../_utils/decorators/protect.decorator.js';
 import { AuthExceptions } from '../_utils/errors/auth-exceptions.types.js';
 import { LOGTO_JWKS } from '../_utils/auth.constants.js';
 import {
   type AuthUser,
   authUserSchema,
 } from '../_utils/types/auth-user.type.js';
-import type { ScopeEnum } from '../_utils/types/scope.enum.js';
+import type { UserRoleEnum } from '../../users/_utils/types/user-role.enum.js';
 
 /**
  * Registered as APP_GUARD: every route requires a Logto access token issued
  * for LOGTO_API_RESOURCE unless decorated with `@Public()`. The token is
  * verified locally against Logto's public keys (cached by jose): no call to
- * Logto per request. Routes decorated with `@Protect(...scopes)` also require
- * those scopes in the token.
+ * Logto per request. Routes decorated with `@Protect(...roles)` also require
+ * one of those roles in the token's `roles` claim.
  */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
@@ -59,14 +59,15 @@ export class JwtAuthGuard implements CanActivate {
       .getRequest<Request & { user: AuthUser }>();
     request.user = await this.authenticate(request);
 
-    // Merge, not override: a bare @Protect() on a route must not drop the
-    // scopes its controller requires.
-    const scopes = this.reflector.getAllAndMerge<ScopeEnum[]>(
-      SCOPES_KEY,
+    const roles = this.reflector.getAllAndOverride<UserRoleEnum[]>(
+      ROLES_KEY,
       targets,
     );
-    if (scopes.some((scope) => !request.user.scopes.includes(scope)))
-      throw this.exceptions.INSUFFICIENT_SCOPE;
+    if (
+      roles?.length &&
+      !roles.some((role) => request.user.roles.includes(role))
+    )
+      throw this.exceptions.INSUFFICIENT_ROLE;
 
     return true;
   }

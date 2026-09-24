@@ -2,7 +2,7 @@
 
 Opinionated starter for a NestJS 12 REST API: ESM, MongoDB (Mongoose), Zod
 validation end to end, authentication delegated to a self-hosted Logto
-(access tokens verified locally, permission-based `@Protect()`), and the production
+(access tokens verified locally, role-based `@Protect()`), and the production
 basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 
 ## Stack
@@ -42,7 +42,7 @@ pnpm start:dev                # http://localhost:3000/api/v1 — Swagger at /api
 | Service  | Image                  | Ports                              | Notes                                         |
 | -------- | ---------------------- | ---------------------------------- | --------------------------------------------- |
 | MongoDB  | `mongo:8.3`            | `27018` → 27017                    | Business data                                 |
-| Logto    | `svhd/logto:1.43.0`    | `3001` OIDC, `3002` admin console  | Users, sign-in, roles/permissions             |
+| Logto    | `svhd/logto:1.43.0`    | `3001` OIDC, `3002` admin console  | Users, sign-in, roles                         |
 | Logto DB | `postgres:18.6-alpine` | —                                  | Logto's own database (not exposed)            |
 | Maildev  | `maildev/maildev`      | `1025` SMTP, `1080` inbox UI       | Catches Logto's emails (SMTP connector)       |
 | RustFS   | `rustfs/rustfs`        | `9000` S3 API, `9001` console      | S3-compatible storage, `rustfsadmin` / `rustfsadmin` |
@@ -53,10 +53,10 @@ The API itself runs on the host.
 
 Seeded Logto accounts:
 
-| Role  | Email                  | Password                | Permissions  |
-| ----- | ---------------------- | ----------------------- | ------------ |
-| admin | `admin@example.com`    | `Adm1n-Boilerplate!`    | `read:users` |
-| —     | `john.doe@example.com` | `J0hn-Doe-Boilerplate!` | —            |
+| Roles         | Email                  | Password                |
+| ------------- | ---------------------- | ----------------------- |
+| `admin`, `user` | `admin@example.com`  | `Adm1n-Boilerplate!`    |
+| `user`        | `john.doe@example.com` | `J0hn-Doe-Boilerplate!` |
 
 ### Scripts
 
@@ -169,17 +169,19 @@ are handled by Logto: the API has no auth route and stores no password.
   cached by `jose`), its issuer (`<LOGTO_ENDPOINT>/oidc`), audience
   (`LOGTO_API_RESOURCE`) and expiry. Nothing is fetched from Logto per
   request. Opt out with `@Public()` on a route or a whole controller.
-- **Authorization is permission-based.** Permissions (`read:users`, …) are
-  declared on the API resource in Logto and listed in
-  [scope.enum.ts](src/auth/_utils/types/scope.enum.ts); roles (`admin`, …)
-  group them and are assigned to users in Logto. The token's `scope` claim
-  carries the user's permissions, so `@Protect(ScopeEnum.READ_USERS)` is a
-  local check. Several scopes = all required. Missing → `403 INSUFFICIENT_SCOPE`.
-- `@ConnectedUser()` injects `AuthUser = { id, scopes }` decoded from the
+- **Authorization is role-based.** The user roles are created in Logto
+  (`user`, the default role given on sign-up, and `admin`) and mirrored by
+  [user-role.enum.ts](src/users/_utils/types/user-role.enum.ts). Logto does
+  not put roles in access tokens by default: a *Custom JWT* script (installed
+  by `pnpm seed`, see [seed.data.ts](src/seed/seed.data.ts)) adds a `roles`
+  claim, so `@Protect(UserRoleEnum.ADMIN)` is a local check. Several roles =
+  any of them. Missing → `403 INSUFFICIENT_ROLE`. Roles on a route replace
+  those of its controller.
+- `@ConnectedUser()` injects `AuthUser = { id, roles }` decoded from the
   token (`id` is the Logto user id). Fetch the profile through
   `UsersService.findById()` only where it is needed.
-- A role or permission change applies when the access token is renewed
-  (Logto's default TTL is one hour, set per API resource).
+- A role change applies when the access token is renewed (Logto's default
+  TTL is one hour, set per API resource).
 
 ```ts
 @Controller('users')
@@ -190,8 +192,8 @@ export class UsersController {
   getMe(@ConnectedUser() user: AuthUser) { … }
 
   @Get()
-  @Protect(ScopeEnum.READ_USERS)       // needs the read:users permission
-  @ApiOperation({ summary: 'List users' })             // → "List users (read:users)"
+  @Protect(UserRoleEnum.ADMIN)         // admins only
+  @ApiOperation({ summary: 'List users' })             // → "List users (ADMIN)"
   findAll() { … }
 
   @Public()
@@ -202,10 +204,10 @@ export class UsersController {
 
 Access is documented by the decorators themselves, in standard OpenAPI that
 Swagger and Scalar render natively: `@Public()` removes the bearer
-requirement, `@Protect()` adds the `401` response and `@Protect(scopes…)` the
-`403` with the required permissions. Each route names itself with
+requirement, `@Protect()` adds the `401` response and `@Protect(roles…)` the
+`403` with the required roles. Each route names itself with
 `@ApiOperation({ summary })`, and `@Protect()` appends the access to that
-title — `(ALL)` or `(read:users)` — so it reads from the collapsed list. Keep
+title — `(ALL)` or `(ADMIN)` — so it reads from the collapsed list. Keep
 `@ApiOperation` **below** `@Protect`: decorators apply bottom-up, and an
 `@ApiOperation` above would overwrite the label.
 
@@ -232,12 +234,13 @@ Once per environment (the admin console is at <http://localhost:3002>):
 2. **Applications → Machine-to-machine → Create.** Assign it the role
    *Logto Management API access*. Copy its App ID / App secret into
    `LOGTO_M2M_CLIENT_ID` / `LOGTO_M2M_CLIENT_SECRET`.
-3. **`pnpm seed`**: creates the API resource `LOGTO_API_RESOURCE`, one
-   permission per `ScopeEnum` value, the `admin` role and the seeded users.
-   Re-run it after adding a `ScopeEnum` value.
+3. **`pnpm seed`**: creates the API resource `LOGTO_API_RESOURCE`, the
+   *Custom JWT* script for user access tokens (`roles` claim — it replaces
+   any existing script, visible under *Custom JWT* in the console), the
+   `user` (default) and `admin` roles and the seeded users. Re-run it after
+   adding a `UserRoleEnum` value (and add it to `seedRoles`).
 4. **Applications → your front-end** (e.g. *Single page app*): redirect URIs
-   of your front, and in the SDK config `resources: [LOGTO_API_RESOURCE]`
-   and the `scopes` it needs (`read:users`, …).
+   of your front, and `resources: [LOGTO_API_RESOURCE]` in the SDK config.
 5. *Optional* — **Connectors → Email → SMTP**: host `maildev`, port `1025`,
    no auth, so verification / reset codes land in Maildev
    (<http://localhost:1080>).
@@ -315,7 +318,7 @@ orchestrators.
 | Missing / invalid / expired token | 401 | `{ message: "INVALID_TOKEN" }`                 |
 | Upload rejected (type/size)  | 400    | `{ message: "Validation failed", errors: [...] }`     |
 | Upload over multer limit     | 413    | `{ message: "File too large" }`                        |
-| Missing permission           | 403    | `{ message: "INSUFFICIENT_SCOPE" }`                   |
+| Missing role                 | 403    | `{ message: "INSUFFICIENT_ROLE" }`                    |
 | User deleted in Logto        | 404    | `{ message: "USER_NOT_FOUND" }`                       |
 | Duplicate key at DB level    | 409    | `{ message: "DUPLICATE_KEY" }`                        |
 | Rate limit exceeded          | 429    | `{ message: "ThrottlerException: Too Many Requests" }`|
