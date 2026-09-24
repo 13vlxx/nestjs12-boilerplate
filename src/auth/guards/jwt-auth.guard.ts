@@ -59,11 +59,13 @@ export class JwtAuthGuard implements CanActivate {
       .getRequest<Request & { user: AuthUser }>();
     request.user = await this.authenticate(request);
 
-    const scopes = this.reflector.getAllAndOverride<ScopeEnum[]>(
+    // Merge, not override: a bare @Protect() on a route must not drop the
+    // scopes its controller requires.
+    const scopes = this.reflector.getAllAndMerge<ScopeEnum[]>(
       SCOPES_KEY,
       targets,
     );
-    if (scopes?.some((scope) => !request.user.scopes.includes(scope)))
+    if (scopes.some((scope) => !request.user.scopes.includes(scope)))
       throw this.exceptions.INSUFFICIENT_SCOPE;
 
     return true;

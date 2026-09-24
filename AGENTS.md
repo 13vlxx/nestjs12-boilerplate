@@ -118,8 +118,8 @@ regular methods when there is a body.
   `admin`), then `@Protect(ScopeEnum.X)` (all listed scopes required). Don't
   check roles in code; roles only group permissions in Logto.
 - Every non-public route declares its access explicitly: `@Protect()` (any
-  authenticated user) or `@Protect(ScopeEnum.X, …)`. A bare `@Protect()` sets
-  no scopes, so it never loosens a controller-level restriction.
+  authenticated user) or `@Protect(ScopeEnum.X)`. Scopes on the controller
+  and the route add up (`getAllAndMerge`).
 - `@ConnectedUser() user: AuthUser` gives `{ id, scopes }` from the token.
   Load the Logto user (`UsersService.findById`) only in routes that need it.
 - Every route has `@ApiOperation({ summary })`, placed **below** `@Protect`:

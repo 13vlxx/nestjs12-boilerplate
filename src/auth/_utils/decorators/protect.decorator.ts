@@ -37,8 +37,7 @@ const AccessLabel =
  * Every route is already protected by the global JwtAuthGuard; put
  * `@Protect()` on every non-public route anyway so access is readable at a
  * glance. With arguments, the access token must also carry all the given
- * permission(s). A bare `@Protect()` sets no scopes, so it never loosens a
- * controller-level restriction.
+ * permission(s), in addition to those required by the controller.
  */
 export const Protect = (...scopes: ScopeEnum[]) =>
   applyDecorators(
