@@ -28,10 +28,13 @@ clean up after yourself. Get user tokens by exchanging the PAT printed by
 itself, use a throwaway Logto (`docker compose -p <tmp> …` on other ports),
 never the shared one.
 
-The Yaak workspace in `yaak/` (directory sync) has one request per route:
-add a request file when you add a route (same `folderId` as the *API*
-folder, `${[ API_URL ]}` in the URL, auth inherited). Never put tokens, PATs
-or app ids in those files: they belong in a private Yaak environment.
+The Yaak workspace in `yaak/` (directory sync) has one request per route,
+under *NestJS 12 Boilerplate Backend* in one subfolder per module (*Users*,
+*Health*…). Add a request file when you add a route (`folderId` of the
+module's subfolder — create it for a new module — `${[ API_URL ]}` in the
+URL, auth inherited). Shared variables go in the *Localhost* environment;
+never put tokens, PATs or app ids in `yaak/`: they belong in the private
+Global Variables.
 
 ## Module layout
 

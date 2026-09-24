@@ -1,16 +1,15 @@
 type: folder
 model: folder
-id: fl_ik2SjwDSe7
-createdAt: 2026-09-24T12:00:00.000000
-updatedAt: 2026-09-24T12:00:00.000000
+id: fl_xs2UqAQyrt
+createdAt: 2026-09-24T20:10:00.000000
+updatedAt: 2026-09-24T20:10:00.000000
 workspaceId: wk_AdUBdJOl2q
-folderId: null
-authentication:
-  token: ${[ response.body.path(request='rq_ZYDaBum3tO', path='$.access_token', behavior='ttl', ttl='3300') ]}
-authenticationType: bearer
-description: Bearer = the access token of Logto / Get access token, re-fetched once it is older than 55 min.
+folderId: fl_ik2SjwDSe7
+authentication: {}
+authenticationType: null
+description: ''
 headers: []
-name: NestJS 12 Boilerplate Backend
+name: Users
 sortPriority: 2000.0
 settingSendCookies:
   enabled: false

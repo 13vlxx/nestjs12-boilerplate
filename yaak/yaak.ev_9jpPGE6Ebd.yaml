@@ -3,12 +3,24 @@ model: environment
 id: ev_9jpPGE6Ebd
 workspaceId: wk_AdUBdJOl2q
 createdAt: 2026-09-24T20:00:04.571607
-updatedAt: 2026-09-24T20:00:04.571608
+updatedAt: 2026-09-24T20:10:00.000000
 name: Localhost
 public: true
 base: false
 parentModel: environment
 parentId: null
-variables: []
+variables:
+- enabled: true
+  name: API_URL
+  value: http://localhost:3000/api/v1
+  id: hxwwj8gAun
+- enabled: true
+  name: LOGTO_ENDPOINT
+  value: http://localhost:3001
+  id: 6Uy9rUzgvr
+- enabled: true
+  name: LOGTO_API_RESOURCE
+  value: http://localhost:3000/api/v1
+  id: 95oGBvJJVW
 color: var(--info)
 sortPriority: 0.0

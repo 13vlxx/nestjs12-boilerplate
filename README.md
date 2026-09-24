@@ -228,10 +228,14 @@ LOGTO_PAT (john.doe@example.com) = pat_…
 **With Yaak** — the workspace lives in [yaak/](yaak) (*Open workspace* →
 pick the folder, or *Sync to directory*):
 
-1. Create a **private** environment (not shared, so it is never written to
-   `yaak/`) with `LOGTO_DEV_APP_ID` and `LOGTO_PAT`; one per user you want to
-   impersonate (e.g. *admin*, *john*).
-2. Send any request of the *API* folder: its Bearer is
+1. Select the **Localhost** environment (shared: `API_URL`,
+   `LOGTO_ENDPOINT`, `LOGTO_API_RESOURCE`).
+2. In **Global Variables**, turn sharing off (private environments are never
+   written to `yaak/`), then add `LOGTO_DEV_APP_ID` and `LOGTO_PAT`. Only one
+   sub-environment is active at a time, which is why these per-machine
+   values live in the global one. Change `LOGTO_PAT` to switch user.
+3. Send any request of *NestJS 12 Boilerplate Backend* (one subfolder per
+   module: *Health*, *Users*, …): its Bearer is
    `response.body.path()` of *Logto / Get access token*, sent automatically
    when there is no response yet or the last one is older than 55 min.
 
