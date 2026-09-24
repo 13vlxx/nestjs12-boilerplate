@@ -2,7 +2,7 @@
 version: '3'
 tasks:
   up:
-    desc: Start the local dependencies (MongoDB, Maildev, RustFS)
+    desc: Start the local dependencies (MongoDB, Logto, Maildev, RustFS)
     cmds:
       - docker compose up -d --wait
 
@@ -32,7 +32,7 @@ tasks:
       - pnpm format
 
   seed:
-    desc: Drop the database and insert the seed data
+    desc: Drop MongoDB and create the missing API resource, roles and users in Logto
     cmds:
       - pnpm seed
 

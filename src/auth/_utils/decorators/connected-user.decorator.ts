@@ -1,9 +1,9 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
 import type { Request } from 'express';
-import { UserDocument } from '../../../users/users.schema.js';
+import type { AuthUser } from '../types/auth-user.type.js';
 
-/** The user resolved by JwtStrategy. Only meaningful on routes decorated with `@Protect()`. */
+/** The user decoded from the access token by JwtAuthGuard: `{ id, scopes }`. */
 export const ConnectedUser = createParamDecorator(
-  (_data: unknown, ctx: ExecutionContext): UserDocument =>
-    ctx.switchToHttp().getRequest<Request & { user: UserDocument }>().user,
+  (_data: unknown, ctx: ExecutionContext): AuthUser =>
+    ctx.switchToHttp().getRequest<Request & { user: AuthUser }>().user,
 );

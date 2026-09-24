@@ -1,28 +1,27 @@
-import type { CreateUserDto } from '../users/_utils/dtos/requests/create-user.dto.js';
-import { UserRoleEnum } from '../users/_utils/types/user-role.enum.js';
+import { ScopeEnum } from '../auth/_utils/types/scope.enum.js';
 
-export interface SeedUser {
-  dto: CreateUserDto;
-  role: UserRoleEnum;
-}
+export const SEED_API_RESOURCE_NAME = 'NestJS Boilerplate API';
 
-export const seedUsers: SeedUser[] = [
+export const seedRoles = [
   {
-    dto: {
-      firstName: 'Admin',
-      lastName: 'Boilerplate',
-      email: 'admin@example.com',
-      password: 'Admin1234!',
-    },
-    role: UserRoleEnum.ADMIN,
+    name: 'admin',
+    description: 'Every permission of the API',
+    scopes: Object.values(ScopeEnum),
+  },
+];
+
+// Logto's default password policy rejects known-breached passwords.
+export const seedUsers = [
+  {
+    email: 'admin@example.com',
+    name: 'Admin Boilerplate',
+    password: 'Adm1n-Boilerplate!',
+    roles: ['admin'],
   },
   {
-    dto: {
-      firstName: 'John',
-      lastName: 'Doe',
-      email: 'john.doe@example.com',
-      password: 'Passw0rd!',
-    },
-    role: UserRoleEnum.USER,
+    email: 'john.doe@example.com',
+    name: 'John Doe',
+    password: 'J0hn-Doe-Boilerplate!',
+    roles: [],
   },
 ];

@@ -1,26 +1,48 @@
-import { ExecutionContext, Injectable } from '@nestjs/common';
+import {
+  type CanActivate,
+  type ExecutionContext,
+  Inject,
+  Injectable,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Reflector } from '@nestjs/core';
-import { AuthGuard } from '@nestjs/passport';
 import type { Request } from 'express';
-import { JWT_STRATEGY_NAME } from '../strategies/jwt.strategy.js';
+import { jwtVerify, type JWTVerifyGetKey } from 'jose';
+import type {
+  EnvironmentVariables,
+  LogtoConfig,
+} from '../../_utils/config/env.config.js';
 import { IS_PUBLIC_KEY } from '../_utils/decorators/public.decorator.js';
-import { ROLES_KEY } from '../_utils/decorators/protect.decorator.js';
+import { SCOPES_KEY } from '../_utils/decorators/protect.decorator.js';
 import { AuthExceptions } from '../_utils/errors/auth-exceptions.types.js';
-import { UserRoleEnum } from '../../users/_utils/types/user-role.enum.js';
-import type { UserDocument } from '../../users/users.schema.js';
+import { LOGTO_JWKS } from '../_utils/auth.constants.js';
+import {
+  type AuthUser,
+  authUserSchema,
+} from '../_utils/types/auth-user.type.js';
+import type { ScopeEnum } from '../_utils/types/scope.enum.js';
 
 /**
- * Registered as APP_GUARD: every route requires a valid Bearer token unless
- * decorated with `@Public()`. Routes decorated with `@Protect(...roles)` also
- * require the connected user to have one of those roles.
+ * Registered as APP_GUARD: every route requires a Logto access token issued
+ * for LOGTO_API_RESOURCE unless decorated with `@Public()`. The token is
+ * verified locally against Logto's public keys (cached by jose): no call to
+ * Logto per request. Routes decorated with `@Protect(...scopes)` also require
+ * those scopes in the token.
  */
 @Injectable()
-export class JwtAuthGuard extends AuthGuard(JWT_STRATEGY_NAME) {
+export class JwtAuthGuard implements CanActivate {
+  private readonly issuer: string;
+  private readonly audience: string;
+
   constructor(
+    @Inject(LOGTO_JWKS) private readonly jwks: JWTVerifyGetKey,
+    configService: ConfigService<EnvironmentVariables, true>,
     private readonly reflector: Reflector,
     private readonly exceptions: AuthExceptions,
   ) {
-    super();
+    const logto = configService.get<LogtoConfig>('LOGTO');
+    this.issuer = new URL('/oidc', logto.ENDPOINT).toString();
+    this.audience = logto.API_RESOURCE;
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -32,20 +54,33 @@ export class JwtAuthGuard extends AuthGuard(JWT_STRATEGY_NAME) {
     );
     if (isPublic) return true;
 
-    const isAuthenticated = await super.canActivate(context);
-    if (!isAuthenticated) return false;
+    const request = context
+      .switchToHttp()
+      .getRequest<Request & { user: AuthUser }>();
+    request.user = await this.authenticate(request);
 
-    const roles = this.reflector.getAllAndOverride<UserRoleEnum[]>(
-      ROLES_KEY,
+    const scopes = this.reflector.getAllAndOverride<ScopeEnum[]>(
+      SCOPES_KEY,
       targets,
     );
-    if (!roles?.length) return true;
-
-    const { user } = context
-      .switchToHttp()
-      .getRequest<Request & { user: UserDocument }>();
-    if (!roles.includes(user.role)) throw this.exceptions.INSUFFICIENT_ROLE;
+    if (scopes?.some((scope) => !request.user.scopes.includes(scope)))
+      throw this.exceptions.INSUFFICIENT_SCOPE;
 
     return true;
+  }
+
+  private async authenticate(request: Request): Promise<AuthUser> {
+    const [type, token] = request.headers.authorization?.split(' ') ?? [];
+    if (type !== 'Bearer' || !token) throw this.exceptions.INVALID_TOKEN;
+
+    try {
+      const { payload } = await jwtVerify(token, this.jwks, {
+        issuer: this.issuer,
+        audience: this.audience,
+      });
+      return authUserSchema.parse(payload);
+    } catch {
+      throw this.exceptions.INVALID_TOKEN;
+    }
   }
 }

@@ -7,23 +7,26 @@ over your defaults.
 ## Stack in one line
 
 NestJS 12 · ESM · TypeScript strict · MongoDB/Mongoose 9 · Zod 4 +
-`nestjs-zod` · Passport JWT (access + refresh, Bearer) · bcrypt · nodemailer +
-React Email · S3 (`@aws-sdk/client-s3`) · `@nestjs/throttler` ·
+`nestjs-zod` · Logto self-hosted (OIDC, `jose` for tokens, `@logto/api` for
+the Management API) · S3 (`@aws-sdk/client-s3`) · `@nestjs/throttler` ·
 `@nestjs/terminus` · pnpm · oxlint · Prettier.
 
 ## Commands
 
 ```bash
-docker compose up -d --wait   # MongoDB :27017, Maildev :1025/:1080, RustFS :9000/:9001
+docker compose up -d --wait   # MongoDB :27018, Logto :3001/:3002, Maildev :1025/:1080, RustFS :9000/:9001
 pnpm start:dev                # http://localhost:3000/api/v1, Swagger at /api/doc, Scalar at /api/doc-scalar
 pnpm build && pnpm lint && pnpm format   # must all pass before you are done
-pnpm seed                     # DROPS the database, recreates indexes, inserts src/seed/seed.data.ts
+pnpm seed                     # DROPS MongoDB; creates missing API resource/permissions/roles/users in Logto
 ```
 
 There are no automated tests in this repo (by choice). Verify changes by
 building, then exercising the routes with curl or Swagger against the Docker
 services. Use a throwaway `DATABASE_NAME` / `S3_BUCKET` when scripting and
-clean up after yourself.
+clean up after yourself. For a user access token without a browser, use
+Logto's token exchange (`POST /api/subject-tokens` then `grant_type=
+urn:ietf:params:oauth:grant-type:token-exchange` with `resource` = the API)
+on a throwaway Logto (`docker compose -p <tmp> …`), never the shared one.
 
 ## Module layout
 
@@ -47,8 +50,9 @@ Every feature module mirrors `src/users`. Copy its shape, don't invent one:
 ```
 
 Cross-cutting code lives in `src/_utils/` (config, filters, regex, schemas,
-helpers). Infrastructure modules (`s3`, `emails`, `encryption`) expose a
-service and are imported where needed; `AuthModule` is `@Global()`.
+helpers). Infrastructure modules (`s3`, `logto`) expose a service and are
+imported where needed; `AuthModule` is `@Global()`. `users` has no
+repository nor schema: its data lives in Logto, read through `LogtoService`.
 
 ## Layers
 
@@ -58,8 +62,8 @@ service and are imported where needed; `AuthModule` is `@Global()`.
   its `status`. Routes returning nothing use `@HttpCode(HttpStatus.NO_CONTENT)`
   and `Promise<void>`.
 - **Service**: business logic. Methods called by *controllers* return DTOs
-  (via the mapper). Methods called by *other modules* return documents
-  (`UserDocument`), because callers need `_id`, hashes, etc. Throw from the
+  (via the mapper). Methods called by *other modules* return documents or
+  records (`LogtoUser`), because callers need ids and raw fields. Throw from the
   module's exceptions catalogue; never `new XException()` inline.
 - **Repository**: the only place that touches the Mongoose model. Small,
   explicit methods (`findByEmailOrNull`, `updatePassword`…). `OrNull` suffix
@@ -102,33 +106,49 @@ regular methods when there is a body.
 
 ## Auth
 
-- **Every route is protected by default** (`JwtAuthGuard` as `APP_GUARD`).
-  `@Public()` opts out; `@Protect(UserRoleEnum.ADMIN, …)` restricts to roles;
-  `@RefreshTokenProtected()` authenticates with the refresh token.
+- Logto owns sign-up, sign-in, passwords, emails, MFA. The API has no auth
+  route and must not store credentials or add one.
+- **Every route is protected by default** (`JwtAuthGuard` as `APP_GUARD`):
+  it verifies the Bearer token locally with `jose` against Logto's JWKS
+  (issuer `<LOGTO_ENDPOINT>/oidc`, audience `LOGTO_API_RESOURCE`). Never call
+  Logto from the guard: one HTTP call per request is what this design avoids.
+  `@Public()` opts out.
+- Authorization = permissions of the API resource. Add the value to
+  `ScopeEnum`, run `pnpm seed` (creates it in Logto and grants it to
+  `admin`), then `@Protect(ScopeEnum.X)` (all listed scopes required). Don't
+  check roles in code; roles only group permissions in Logto.
 - Every non-public route declares its access explicitly: `@Protect()` (any
-  authenticated user) or `@Protect(UserRoleEnum.X, …)`. Roles on a route
-  replace the controller's; a bare `@Protect()` sets no roles, so it never
-  loosens a controller-level restriction.
-- `@ConnectedUser() user: UserDocument` gives the authenticated user, loaded
-  from the DB on every request.
-- Access tokens are short-lived and stateless; refresh tokens are rotated and
-  stored as SHA-256 on the user (single device). One-shot tokens (email
-  verification, password reset) go through `token.utils.ts` and
-  `ActionToken { hash, expiresAt }`. Never bcrypt a token — bcrypt truncates
-  at 72 bytes; bcrypt is for passwords only, via `EncryptionService`.
+  authenticated user) or `@Protect(ScopeEnum.X, …)`. A bare `@Protect()` sets
+  no scopes, so it never loosens a controller-level restriction.
+- `@ConnectedUser() user: AuthUser` gives `{ id, scopes }` from the token.
+  Load the Logto user (`UsersService.findById`) only in routes that need it.
 - Every route has `@ApiOperation({ summary })`, placed **below** `@Protect`:
-  `@Protect` appends `(ALL)` / `(ADMIN)` to that summary when it runs, and
-  decorators apply bottom-up. Don't write the label by hand.
-- `@Public()` / `@Protect()` / `@RefreshTokenProtected()` document access
-  themselves (no bearer / `401` / `403` with the roles); don't hand-write
-  those responses and don't post-process the OpenAPI document (only
-  `cleanupOpenApiDoc`).
+  `@Protect` appends `(ALL)` / `(read:users)` to that summary when it runs,
+  and decorators apply bottom-up. Don't write the label by hand.
+- `@Public()` / `@Protect()` document access themselves (no bearer / `401` /
+  `403` with the scopes); don't hand-write those responses and don't
+  post-process the OpenAPI document (only `cleanupOpenApiDoc`).
+
+## Logto
+
+- Management API calls go through `LogtoService` (typed `openapi-fetch`
+  client from `@logto/api`, injected by the `LOGTO_MANAGEMENT_API` token).
+  Wrap calls with `unwrap` / `unwrapOrNull` (`logto-response.utils.ts`); add
+  a small method per use case, like a repository.
+- Types come from that client: `LogtoUser` is inferred from
+  `LogtoService.findUserByIdOrNull`; don't hand-write Logto shapes.
+- `customData` is merged on `PATCH`, can be edited outside the API and is
+  untyped: describe it with a Zod schema (`user-custom-data.type.ts`), use
+  `.catch()` so bad data degrades instead of 500ing, never put permissions
+  in it, and check S3 keys belong to the user before presigning/deleting.
+- Business documents reference users by Logto id (string, no populate).
 
 ## Files
 
 - No `files` collection. A stored file is an embedded `S3File`
   (`@Prop({ type: S3FileSchema }) picture: S3File | null`) on the document
-  that owns it.
+  that owns it, or a `storedS3FileSchema` entry in a Logto user's
+  `customData`.
 - `S3Service.uploadFile(file, folder)` returns the `S3File`; folders are
   named in `S3KeysMapper` (one method per use case — never build a key
   string inside a service). Delete the previous object when replacing.
@@ -139,20 +159,20 @@ regular methods when there is a body.
 
 ## Emails
 
-One template function per email in `src/emails/templates/*.template.tsx`
-(returns JSX built on `LayoutTemplate`), one `sendXxx(user, …)` method on
-`EmailsService` that builds links from `CLIENT_URL`. Sending is awaited in
-the request; there is no queue.
+Auth emails (verification codes, password reset, MFA) are sent by Logto
+through its SMTP connector (Maildev locally). There is no mailer in the API
+yet; if one is needed, create it as an infrastructure module (client built
+with `useFactory`, token in `<feature>.constants.ts`).
 
 ## Dependency injection & ESM gotchas
 
-- Infrastructure clients (S3, SMTP) are created in the module with a
+- Infrastructure clients (S3, Logto Management API, JWKS) are created in the module with a
   `useFactory` provider and injected by token. Injection tokens live in
   `<feature>.constants.ts`, **never** in the module file: a service importing
   its own module creates an ESM cycle that fails at startup.
 - Relative imports end with `.js` (even for `.ts`/`.tsx` sources).
 - Types used in decorated signatures (controller params, constructor params)
-  must be `import type` when they are only types (`UserDocument`, DTO classes
+  must be `import type` when they are only types (`AuthUser`, DTO classes
   are fine as values). The compiler error is TS1272.
 - No `__dirname`; use `import.meta.dirname` if ever needed.
 
@@ -171,6 +191,8 @@ the request; there is no queue.
 - Add `class-validator`, `class-transformer`, `nestjs-form-data`,
   `@nestjs-modules/mailer`, or Mongoose `populate` for files.
 - Use cookies for auth, or put secrets in the repo (`.env.development` holds
-  dev-only placeholders).
+  dev-only placeholders; the Logto M2M credentials stay empty there).
+- Reintroduce passport, `@nestjs/jwt`, bcrypt or a local users collection
+  for authentication.
 - Use `any`; reach for `unknown` + a Zod parse.
 - Write tests or test tooling unless explicitly asked.

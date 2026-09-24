@@ -1,7 +1,8 @@
 # NestJS 12 Boilerplate
 
 Opinionated starter for a NestJS 12 REST API: ESM, MongoDB (Mongoose), Zod
-validation end to end, JWT authentication with roles, and the production
+validation end to end, authentication delegated to a self-hosted Logto
+(access tokens verified locally, permission-based `@Protect()`), and the production
 basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 
 ## Stack
@@ -12,9 +13,9 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 | Framework         | NestJS 12 + Express                                                    |
 | Database          | MongoDB via `@nestjs/mongoose` / Mongoose 9                            |
 | Validation        | Zod 4 + `nestjs-zod` — DTOs, env vars and responses share one schema   |
-| Auth              | `@nestjs/passport` + `passport-jwt`, access + refresh tokens as Bearer |
-| Password hashing  | bcrypt behind an upgradable `EncryptionService`                        |
-| Emails            | nodemailer + React Email templates (Maildev locally)                   |
+| Auth              | [Logto](https://logto.io) (self-hosted): OIDC, users, roles, emails    |
+| Token check       | `jose` against Logto's JWKS — no call to Logto per request             |
+| Users             | Logto Management API (`@logto/api`), profile data in `customData`      |
 | Files             | S3-compatible storage (RustFS locally), multipart upload, presigned reads|
 | Rate limiting     | `@nestjs/throttler`                                                    |
 | Health            | `@nestjs/terminus` (MongoDB ping)                                      |
@@ -25,41 +26,50 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 
 ```bash
 pnpm install
-docker compose up -d --wait   # MongoDB, Maildev, RustFS (see below)
-pnpm seed                     # drops the DB and inserts the users from src/seed/seed.data.ts
+docker compose up -d --wait   # MongoDB, Logto (+ its Postgres), Maildev, RustFS
+```
+
+Then configure Logto once (see [Logto setup](#logto-setup)), fill
+`LOGTO_M2M_CLIENT_ID` / `LOGTO_M2M_CLIENT_SECRET`, and:
+
+```bash
+pnpm seed                     # drops MongoDB, creates the API resource, roles and users in Logto
 pnpm start:dev                # http://localhost:3000/api/v1 — Swagger at /api/doc, Scalar at /api/doc-scalar
 ```
 
 ### Local services (`docker-compose.yml`)
 
-| Service | Image                | Ports                                | Notes                                         |
-| ------- | -------------------- | ------------------------------------ | --------------------------------------------- |
-| MongoDB | `mongo:8.3`          | `27017`                              |                                               |
-| Maildev | `maildev/maildev`    | `1025` SMTP, `1080` inbox UI         | Catches every email sent by the API           |
-| RustFS  | `rustfs/rustfs`      | `9000` S3 API, `9001` console        | S3-compatible storage, `rustfsadmin` / `rustfsadmin` |
+| Service  | Image                  | Ports                              | Notes                                         |
+| -------- | ---------------------- | ---------------------------------- | --------------------------------------------- |
+| MongoDB  | `mongo:8.3`            | `27018` → 27017                    | Business data                                 |
+| Logto    | `svhd/logto:1.43.0`    | `3001` OIDC, `3002` admin console  | Users, sign-in, roles/permissions             |
+| Logto DB | `postgres:18.6-alpine` | —                                  | Logto's own database (not exposed)            |
+| Maildev  | `maildev/maildev`      | `1025` SMTP, `1080` inbox UI       | Catches Logto's emails (SMTP connector)       |
+| RustFS   | `rustfs/rustfs`        | `9000` S3 API, `9001` console      | S3-compatible storage, `rustfsadmin` / `rustfsadmin` |
 
-Data lives in named volumes; `docker compose down -v` (or `task reset`) wipes it.
+Data lives in named volumes; `docker compose down -v` (or `task reset`) wipes it
+— including Logto's configuration and users.
 The API itself runs on the host.
 
-Seeded accounts:
+Seeded Logto accounts:
 
-| Role  | Email                  | Password     |
-| ----- | ---------------------- | ------------ |
-| admin | `admin@example.com`    | `Admin1234!` |
-| user  | `john.doe@example.com` | `Passw0rd!`  |
+| Role  | Email                  | Password                | Permissions  |
+| ----- | ---------------------- | ----------------------- | ------------ |
+| admin | `admin@example.com`    | `Adm1n-Boilerplate!`    | `read:users` |
+| —     | `john.doe@example.com` | `J0hn-Doe-Boilerplate!` | —            |
 
 ### Scripts
 
-| Command           | Description                                            |
-| ----------------- | ------------------------------------------------------ |
-| `task up`         | Start MongoDB, Maildev and RustFS in Docker            |
-| `task down`       | Stop them (`task reset` also deletes their data)       |
-| `pnpm start:dev`  | Start with file watching                               |
-| `pnpm build`      | Compile to `dist/`                                     |
-| `pnpm start:prod` | Run the compiled app                                   |
-| `pnpm seed`       | **Drop the database**, recreate indexes, insert seeds  |
-| `pnpm lint`       | oxlint (type-aware)                                    |
-| `pnpm format`     | Prettier                                               |
+| Command           | Description                                                        |
+| ----------------- | ------------------------------------------------------------------ |
+| `task up`         | Start MongoDB, Logto, Maildev and RustFS in Docker                 |
+| `task down`       | Stop them (`task reset` also deletes their data)                   |
+| `pnpm start:dev`  | Start with file watching                                           |
+| `pnpm build`      | Compile to `dist/`                                                 |
+| `pnpm start:prod` | Run the compiled app                                               |
+| `pnpm seed`       | **Drop MongoDB**, then create what is missing in Logto (idempotent) |
+| `pnpm lint`       | oxlint (type-aware)                                                |
+| `pnpm format`     | Prettier                                                           |
 
 The same commands are exposed through [Taskfile.yml](Taskfile.yml) (`task dev`, `task seed`, …).
 
@@ -75,19 +85,13 @@ refuses to boot with a clear error if anything is missing or malformed.
 | `PORT`                        | `3000`  |                                                        |
 | `NODE_ENV`                    | —       | `development` \| `staging` \| `production`             |
 | `CORS_ORIGINS`                | `""`    | Comma-separated allowed origins. Empty = CORS disabled |
-| `CLIENT_URL`                  | —       | Front-end base URL, used to build links in emails      |
 | `DATABASE_URL`                | —       | MongoDB connection string                              |
 | `DATABASE_NAME`               | —       |                                                        |
-| `JWT_ACCESS_TOKEN_SECRET`     | —       | At least 32 characters                                 |
-| `JWT_ACCESS_TOKEN_EXPIRATION` | `900`   | Seconds. Short: an access token cannot be revoked      |
-| `JWT_REFRESH_TOKEN_SECRET`    | —       | At least 32 characters, different from the access one  |
-| `JWT_REFRESH_TOKEN_EXPIRATION`| `604800`| Seconds (7 days)                                       |
+| `LOGTO_ENDPOINT`              | —       | Logto base URL (`http://localhost:3001`). Issuer = `<endpoint>/oidc` |
+| `LOGTO_API_RESOURCE`          | —       | API identifier in Logto = the tokens' `aud` (`http://localhost:3000/api/v1`) |
+| `LOGTO_M2M_CLIENT_ID` / `LOGTO_M2M_CLIENT_SECRET` | — | M2M app allowed to call the Management API |
 | `THROTTLE_TTL`                | `60000` | Rate-limit window, milliseconds                        |
 | `THROTTLE_LIMIT`              | `100`   | Max requests per window per IP                         |
-| `MAIL_HOST` / `MAIL_PORT`     | —       | SMTP server (Maildev: `localhost` / `1025`)            |
-| `MAIL_SECURE`                 | `false` | TLS on connect                                         |
-| `MAIL_USER` / `MAIL_PASSWORD` | —       | Optional SMTP auth                                     |
-| `MAIL_FROM`                   | —       | e.g. `"My App <no-reply@example.com>"`                 |
 | `S3_ENDPOINT`                 | —       | e.g. `http://localhost:9000` (RustFS) or AWS endpoint  |
 | `S3_REGION`                   | `us-east-1` |                                                    |
 | `S3_ACCESS_KEY` / `S3_SECRET_KEY` | —   |                                                        |
@@ -95,39 +99,39 @@ refuses to boot with a clear error if anything is missing or malformed.
 | `S3_FORCE_PATH_STYLE`         | `true`  | `true` for RustFS/MinIO, `false` for AWS               |
 
 Config is consumed through `ConfigService<EnvironmentVariables, true>` and is
-fully typed: `config.get<JwtConfig>('JWT').ACCESS_TOKEN_SECRET`.
+fully typed: `config.get<LogtoConfig>('LOGTO').API_RESOURCE`.
 
 ## Project layout
 
 ```
 src/
 ├── _utils/            # cross-cutting: env config, filters, regex
-├── auth/              # register / login, JWT strategy, guard, decorators
-├── encryption/        # password hashing (see below)
+├── auth/              # global JwtAuthGuard (Logto tokens), @Public / @Protect / @ConnectedUser
 ├── health/            # GET /health
-├── emails/            # nodemailer + React Email templates
+├── logto/             # Management API client (LogtoService)
 ├── s3/                # S3 client, FormDataRequest/uploadedFile helpers, S3File sub-document
 ├── seed/              # pnpm seed
-├── users/             # users module (schema, repository, service, mapper)
+├── users/             # /users routes, backed by Logto (no collection)
 ├── app.module.ts
 └── main.ts
 ```
 
-Each feature module follows the same shape:
+Each feature module follows the same shape (`users` has no repository nor
+schema: its data lives in Logto):
 
 ```
-users/
+<feature>/
 ├── _utils/
 │   ├── dtos/requests/     # Zod schemas + createZodDto
 │   ├── dtos/responses/
 │   ├── errors/            # injectable exceptions catalogue
 │   └── types/
-├── users.controller.ts    # only delegates to the service
-├── users.service.ts       # business logic, returns DTOs to controllers
-├── users.repository.ts    # Mongoose queries
-├── users.mapper.ts        # Document -> DTO
-├── users.schema.ts
-└── users.module.ts
+├── <feature>.controller.ts    # only delegates to the service
+├── <feature>.service.ts       # business logic, returns DTOs to controllers
+├── <feature>.repository.ts    # Mongoose queries
+├── <feature>.mapper.ts        # Document -> DTO
+├── <feature>.schema.ts
+└── <feature>.module.ts
 ```
 
 ## Validation & typesafety
@@ -146,59 +150,36 @@ export class CreateUserDto extends createZodDto(createUserSchema) {}
 - `ZodValidationPipe` (global) validates `@Body()`, `@Query()`, `@Param()`.
   Unknown keys are rejected thanks to `strictObject`.
 - `@ZodResponse({ type: GetUserDto })` on a route sets the TypeScript return
-  type, the runtime serialisation (extra fields are stripped, so a document's
-  `password` can never leak) and the Swagger schema in one place. Returning
+  type, the runtime serialisation (extra fields are stripped, so nothing
+  from a document or a Logto user leaks by accident) and the Swagger schema in one place. Returning
   the wrong shape is a compile error.
 - `.meta({ example, description })` feeds Swagger.
 
 ## Authentication & authorization
 
-- `POST /auth/register` and `POST /auth/login` return
-  `{ accessToken, refreshToken, user }`.
-- Send the **access token** as `Authorization: Bearer <accessToken>` on every
-  request. It is short-lived (15 min by default) and cannot be revoked.
-- When it expires, call `POST /auth/refresh` with the **refresh token** as
-  Bearer: you get a fresh pair. Refresh tokens are rotated on every call, and
-  only the latest one is valid (its SHA-256 is stored on the user).
-  Presenting an already-rotated refresh token is treated as a theft: the whole
-  session is revoked and the user must log in again.
-- `POST /auth/logout` (access token) revokes the refresh token.
-- Single device: logging in from another device replaces the previous refresh
-  token. Switch `hashedRefreshToken` for a `sessions` collection if you need
-  concurrent devices.
+Sign-up, sign-in, password reset, email verification, MFA and social login
+are handled by Logto: the API has no auth route and stores no password.
+
+- The front-end signs users in with a Logto SDK and asks for an access token
+  **for the API resource** (`getAccessToken('http://localhost:3000/api/v1')`),
+  then sends it as `Authorization: Bearer <token>`. Without the resource, Logto
+  returns an opaque token or one with another audience: every call is a 401.
 - **Every route is protected by default** (`JwtAuthGuard` registered as
-  `APP_GUARD`). Opt out with `@Public()` on a route or a whole controller.
-- Restrict a route to one or more roles with `@Protect(UserRoleEnum.ADMIN)`.
-  Wrong role → `403 INSUFFICIENT_ROLE`.
-- `@ConnectedUser()` injects the authenticated `UserDocument`. The user is
-  loaded from the database on every request, so a deleted user or a role
-  change is effective immediately.
-- Roles live in [src/users/_utils/types/user-role.enum.ts](src/users/_utils/types/user-role.enum.ts).
-
-### Email verification & password reset
-
-| Route                            | Auth   | Effect                                                              |
-| -------------------------------- | ------ | ------------------------------------------------------------------- |
-| `POST /auth/register`            | public | Creates the user and sends a verification email                     |
-| `POST /auth/verify-email`        | public | `{ token }` → marks the email as verified                           |
-| `POST /auth/resend-verification` | access | Sends a new verification email (409 if already verified)            |
-| `POST /auth/forgot-password`     | public | `{ email }` → sends a reset email. Always 204, even for unknown emails |
-| `POST /auth/reset-password`      | public | `{ token, password }` → sets the password, revokes the refresh token |
-
-Tokens are random 256-bit strings sent in the email link
-(`CLIENT_URL/verify-email?token=…`, `CLIENT_URL/reset-password?token=…`),
-stored as SHA-256 on the user with an expiry (24 h / 1 h, see
-[auth.constants.ts](src/auth/_utils/auth.constants.ts)) and single-use.
-Login is not blocked for unverified emails; `GetUserDto.isEmailVerified`
-lets the client decide what to gate.
-
-## Emails
-
-`EmailsService` ([src/emails](src/emails)) wraps nodemailer and renders
-[React Email](https://react.email) templates (`src/emails/templates/*.tsx`) to
-HTML + plain text. Locally, everything lands in Maildev at
-<http://localhost:1080>. To add an email: write a template function returning
-JSX, add a `sendXxx` method on `EmailsService`.
+  `APP_GUARD`). It verifies the token's signature against Logto's JWKS (keys
+  cached by `jose`), its issuer (`<LOGTO_ENDPOINT>/oidc`), audience
+  (`LOGTO_API_RESOURCE`) and expiry. Nothing is fetched from Logto per
+  request. Opt out with `@Public()` on a route or a whole controller.
+- **Authorization is permission-based.** Permissions (`read:users`, …) are
+  declared on the API resource in Logto and listed in
+  [scope.enum.ts](src/auth/_utils/types/scope.enum.ts); roles (`admin`, …)
+  group them and are assigned to users in Logto. The token's `scope` claim
+  carries the user's permissions, so `@Protect(ScopeEnum.READ_USERS)` is a
+  local check. Several scopes = all required. Missing → `403 INSUFFICIENT_SCOPE`.
+- `@ConnectedUser()` injects `AuthUser = { id, scopes }` decoded from the
+  token (`id` is the Logto user id). Fetch the profile through
+  `UsersService.findById()` only where it is needed.
+- A role or permission change applies when the access token is renewed
+  (Logto's default TTL is one hour, set per API resource).
 
 ```ts
 @Controller('users')
@@ -206,11 +187,11 @@ export class UsersController {
   @Get('me')
   @Protect()                           // any authenticated user
   @ApiOperation({ summary: 'Get the connected user' }) // → "Get the connected user (ALL)"
-  getMe(@ConnectedUser() user: UserDocument) { … }
+  getMe(@ConnectedUser() user: AuthUser) { … }
 
   @Get()
-  @Protect(UserRoleEnum.ADMIN)          // admins only
-  @ApiOperation({ summary: 'List users' })             // → "List users (ADMIN)"
+  @Protect(ScopeEnum.READ_USERS)       // needs the read:users permission
+  @ApiOperation({ summary: 'List users' })             // → "List users (read:users)"
   findAll() { … }
 
   @Public()
@@ -221,20 +202,45 @@ export class UsersController {
 
 Access is documented by the decorators themselves, in standard OpenAPI that
 Swagger and Scalar render natively: `@Public()` removes the bearer
-requirement, `@Protect()` adds the `401` response and `@Protect(roles…)` the
-`403` with the required roles. Each route names itself with
+requirement, `@Protect()` adds the `401` response and `@Protect(scopes…)` the
+`403` with the required permissions. Each route names itself with
 `@ApiOperation({ summary })`, and `@Protect()` appends the access to that
-title — `(ALL)` or `(ADMIN)` — so it reads from the collapsed list. Keep
+title — `(ALL)` or `(read:users)` — so it reads from the collapsed list. Keep
 `@ApiOperation` **below** `@Protect`: decorators apply bottom-up, and an
 `@ApiOperation` above would overwrite the label.
 
-### Password hashing
+### Users & custom data
 
-Hashes are stored as `{<encrypter>}<hash>`, e.g. `{bcrypt}$2b$10$…`. To move
-to a stronger algorithm, add an `Encrypter` with a higher `securityLevel` in
-[src/encryption/encryption.service.ts](src/encryption/encryption.service.ts):
-new passwords use it right away and existing ones are transparently re-hashed
-on the user's next successful login.
+There is no `users` collection. `LogtoService` wraps the Management API
+(typed client from `@logto/api`, authenticated as the M2M app) and
+`UsersService` reads users from it. App-specific profile data lives in the
+user's `customData`, typed and validated by
+[user-custom-data.type.ts](src/users/_utils/types/user-custom-data.type.ts);
+`PATCH` only merges the given keys. Custom data can be edited outside the
+API (Logto console, Account API): never store anything authorization-related
+there, and validate it on read.
+
+To reference a user from a business document, store their Logto id; for
+data that must look the same forever (an order's customer name…), store a
+copy on the document.
+
+### Logto setup
+
+Once per environment (the admin console is at <http://localhost:3002>):
+
+1. **Create the admin account** of the console (first visit).
+2. **Applications → Machine-to-machine → Create.** Assign it the role
+   *Logto Management API access*. Copy its App ID / App secret into
+   `LOGTO_M2M_CLIENT_ID` / `LOGTO_M2M_CLIENT_SECRET`.
+3. **`pnpm seed`**: creates the API resource `LOGTO_API_RESOURCE`, one
+   permission per `ScopeEnum` value, the `admin` role and the seeded users.
+   Re-run it after adding a `ScopeEnum` value.
+4. **Applications → your front-end** (e.g. *Single page app*): redirect URIs
+   of your front, and in the SDK config `resources: [LOGTO_API_RESOURCE]`
+   and the `scopes` it needs (`read:users`, …).
+5. *Optional* — **Connectors → Email → SMTP**: host `maildev`, port `1025`,
+   no auth, so verification / reset codes land in Maildev
+   (<http://localhost:1080>).
 
 ## Files & uploads
 
@@ -275,21 +281,24 @@ fields, cross-field `.refine()`s and `strictObject` apply as usual.
 Storage: `S3Service.uploadFile(file, folder)` puts the object in the bucket
 (folder layout in [s3-keys.mapper.ts](src/s3/s3-keys.mapper.ts)) and returns
 an `S3File` (`key`, `fileName`, `mimeType`, `size`) to embed on the owning
-document — no `files` collection, no references. `S3Mapper.toGetS3FileDto`
+document (or in a Logto user's `customData`) — no `files` collection, no
+references. `S3Mapper.toGetS3FileDto`
 turns it into `{ url, fileName, mimeType, size }` with a presigned URL
 (15 min).
 
 `PUT /users/me/profile-picture` is the shipped example: single required
-image, previous object deleted on replace, `GetUserDto.profilePictureUrl` as
-a presigned URL or `null`. `objectIdSchema`
+image stored in the user's `customData.profilePicture`, previous object
+deleted on replace, `GetUserDto.profilePictureUrl` as a presigned URL or
+`null`. A key outside `users/<id>/profile-picture/` is ignored (neither
+presigned nor deleted), since custom data can be edited outside the API. `objectIdSchema`
 ([object-id.schema.ts](src/_utils/schemas/object-id.schema.ts)) is there for
 `@Param()` DTOs so a malformed id yields a 400 instead of a Mongoose
 `CastError`.
 
 ## Rate limiting
 
-Global limit from `THROTTLE_LIMIT` / `THROTTLE_TTL` per IP. `/auth/*` is
-capped at 10 requests per minute regardless, and `/health` is exempt.
+Global limit from `THROTTLE_LIMIT` / `THROTTLE_TTL` per IP; `/health` is
+exempt. Sign-in attempts are rate-limited by Logto itself.
 Override per controller or route with `@Throttle()` / `@SkipThrottle()`.
 
 ## Health check
@@ -303,19 +312,15 @@ orchestrators.
 | Situation                    | Status | Body                                                  |
 | ---------------------------- | ------ | ----------------------------------------------------- |
 | Invalid payload              | 400    | `{ message: "Validation failed", errors: [...] }`     |
-| Missing / invalid token      | 401    | `{ message: "Unauthorized" }`                         |
-| Wrong credentials            | 401    | `{ message: "WRONG_CREDENTIALS" }`                    |
-| Refresh token invalid/rotated| 401    | `{ message: "INVALID_REFRESH_TOKEN" }`                |
-| Verification token invalid   | 400    | `{ message: "INVALID_VERIFICATION_TOKEN" }`           |
-| Reset token invalid/expired  | 400    | `{ message: "INVALID_RESET_TOKEN" }`                  |
-| Email already verified       | 409    | `{ message: "EMAIL_ALREADY_VERIFIED" }`               |
+| Missing / invalid / expired token | 401 | `{ message: "INVALID_TOKEN" }`                 |
 | Upload rejected (type/size)  | 400    | `{ message: "Validation failed", errors: [...] }`     |
 | Upload over multer limit     | 413    | `{ message: "File too large" }`                        |
-| Insufficient role            | 403    | `{ message: "INSUFFICIENT_ROLE" }`                    |
-| Email already registered     | 409    | `{ message: "EMAIL_ALREADY_USED" }`                   |
+| Missing permission           | 403    | `{ message: "INSUFFICIENT_SCOPE" }`                   |
+| User deleted in Logto        | 404    | `{ message: "USER_NOT_FOUND" }`                       |
 | Duplicate key at DB level    | 409    | `{ message: "DUPLICATE_KEY" }`                        |
 | Rate limit exceeded          | 429    | `{ message: "ThrottlerException: Too Many Requests" }`|
 | Unexpected MongoDB error     | 500    | `{ message: "INTERNAL_SERVER_ERROR" }` (details logged)|
+| Logto Management API failure | 500    | `{ message: "Internal server error" }` (details logged)|
 
 Module-specific error messages are declared as injectable catalogues
 (`UsersExceptions`, `AuthExceptions`) so they are easy to find and reuse.

@@ -15,7 +15,6 @@ const serverConfigSchema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   NODE_ENV: z.enum(NodeEnvEnum),
   CORS_ORIGINS: commaSeparatedList,
-  CLIENT_URL: z.url(),
 });
 
 const databaseConfigSchema = z.object({
@@ -23,29 +22,11 @@ const databaseConfigSchema = z.object({
   DATABASE_NAME: z.string(),
 });
 
-const jwtConfigSchema = z
-  .object({
-    ACCESS_TOKEN_SECRET: z.string().min(32),
-    ACCESS_TOKEN_EXPIRATION: z.coerce.number().int().positive().default(900),
-    REFRESH_TOKEN_SECRET: z.string().min(32),
-    REFRESH_TOKEN_EXPIRATION: z.coerce
-      .number()
-      .int()
-      .positive()
-      .default(7 * 24 * 3600),
-  })
-  .refine((jwt) => jwt.ACCESS_TOKEN_SECRET !== jwt.REFRESH_TOKEN_SECRET, {
-    message: 'ACCESS_TOKEN_SECRET and REFRESH_TOKEN_SECRET must differ',
-    path: ['REFRESH_TOKEN_SECRET'],
-  });
-
-const mailConfigSchema = z.object({
-  HOST: z.string(),
-  PORT: z.coerce.number().int().min(1).max(65535),
-  SECURE: z.stringbool().default(false),
-  USER: z.string().optional(),
-  PASSWORD: z.string().optional(),
-  FROM: z.string(),
+const logtoConfigSchema = z.object({
+  ENDPOINT: z.url(),
+  API_RESOURCE: z.string().min(1),
+  M2M_CLIENT_ID: z.string().min(1),
+  M2M_CLIENT_SECRET: z.string().min(1),
 });
 
 const s3ConfigSchema = z.object({
@@ -64,17 +45,15 @@ const throttleConfigSchema = z.object({
 
 export type ServerConfig = z.infer<typeof serverConfigSchema>;
 export type DatabaseConfig = z.infer<typeof databaseConfigSchema>;
-export type JwtConfig = z.infer<typeof jwtConfigSchema>;
+export type LogtoConfig = z.infer<typeof logtoConfigSchema>;
 export type ThrottleConfig = z.infer<typeof throttleConfigSchema>;
-export type MailConfig = z.infer<typeof mailConfigSchema>;
 export type S3Config = z.infer<typeof s3ConfigSchema>;
 
 export const envSchema = z.object({
   SERVER: serverConfigSchema,
   DATABASE: databaseConfigSchema,
-  JWT: jwtConfigSchema,
+  LOGTO: logtoConfigSchema,
   THROTTLE: throttleConfigSchema,
-  MAIL: mailConfigSchema,
   S3: s3ConfigSchema,
 });
 
@@ -88,29 +67,20 @@ export function validateEnv(
       PORT: config.PORT,
       NODE_ENV: config.NODE_ENV,
       CORS_ORIGINS: config.CORS_ORIGINS,
-      CLIENT_URL: config.CLIENT_URL,
     },
     DATABASE: {
       DATABASE_URL: config.DATABASE_URL,
       DATABASE_NAME: config.DATABASE_NAME,
     },
-    JWT: {
-      ACCESS_TOKEN_SECRET: config.JWT_ACCESS_TOKEN_SECRET,
-      ACCESS_TOKEN_EXPIRATION: config.JWT_ACCESS_TOKEN_EXPIRATION,
-      REFRESH_TOKEN_SECRET: config.JWT_REFRESH_TOKEN_SECRET,
-      REFRESH_TOKEN_EXPIRATION: config.JWT_REFRESH_TOKEN_EXPIRATION,
+    LOGTO: {
+      ENDPOINT: config.LOGTO_ENDPOINT,
+      API_RESOURCE: config.LOGTO_API_RESOURCE,
+      M2M_CLIENT_ID: config.LOGTO_M2M_CLIENT_ID,
+      M2M_CLIENT_SECRET: config.LOGTO_M2M_CLIENT_SECRET,
     },
     THROTTLE: {
       TTL: config.THROTTLE_TTL,
       LIMIT: config.THROTTLE_LIMIT,
-    },
-    MAIL: {
-      HOST: config.MAIL_HOST,
-      PORT: config.MAIL_PORT,
-      SECURE: config.MAIL_SECURE,
-      USER: config.MAIL_USER,
-      PASSWORD: config.MAIL_PASSWORD,
-      FROM: config.MAIL_FROM,
     },
     S3: {
       ENDPOINT: config.S3_ENDPOINT,

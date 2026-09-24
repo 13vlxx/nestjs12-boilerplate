@@ -4,12 +4,15 @@ import {
   ApiUnauthorizedResponse,
   DECORATORS,
 } from '@nestjs/swagger';
-import type { UserRoleEnum } from '../../../users/_utils/types/user-role.enum.js';
+import type { ScopeEnum } from '../types/scope.enum.js';
 
-export const ROLES_KEY = 'roles';
+export const SCOPES_KEY = 'scopes';
 
+// Appends the access to the route's `@ApiOperation` summary, which therefore
+// has to sit below `@Protect` (decorators apply bottom-up); above, it would
+// overwrite the label.
 const AccessLabel =
-  (roles: UserRoleEnum[]): MethodDecorator & ClassDecorator =>
+  (scopes: ScopeEnum[]): MethodDecorator & ClassDecorator =>
   (
     _target: object,
     _key?: string | symbol,
@@ -22,9 +25,7 @@ const AccessLabel =
     ) as { summary?: string } | undefined;
     if (!operation?.summary) return;
 
-    const label = roles.length
-      ? roles.map((role) => role.toUpperCase()).join(', ')
-      : 'ALL';
+    const label = scopes.length ? scopes.join(' + ') : 'ALL';
     Reflect.defineMetadata(
       DECORATORS.API_OPERATION,
       { ...operation, summary: `${operation.summary} (${label})` },
@@ -32,16 +33,23 @@ const AccessLabel =
     );
   };
 
-export const Protect = (...roles: UserRoleEnum[]) =>
+/**
+ * Every route is already protected by the global JwtAuthGuard; put
+ * `@Protect()` on every non-public route anyway so access is readable at a
+ * glance. With arguments, the access token must also carry all the given
+ * permission(s). A bare `@Protect()` sets no scopes, so it never loosens a
+ * controller-level restriction.
+ */
+export const Protect = (...scopes: ScopeEnum[]) =>
   applyDecorators(
     ApiUnauthorizedResponse({ description: 'Missing or invalid access token' }),
-    ...(roles.length
+    ...(scopes.length
       ? [
-          SetMetadata(ROLES_KEY, roles),
+          SetMetadata(SCOPES_KEY, scopes),
           ApiForbiddenResponse({
-            description: `Requires role: ${roles.map((role) => role.toUpperCase()).join(' | ')}`,
+            description: `Requires scope: ${scopes.join(' + ')}`,
           }),
         ]
       : []),
-    AccessLabel(roles),
+    AccessLabel(scopes),
   );
