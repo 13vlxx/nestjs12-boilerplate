@@ -14,6 +14,21 @@ export class LogtoService {
       this.api.GET('/api/users/{userId}', { params: { path: { userId } } }),
     );
 
+  async findUserByEmailOrNull(email: string) {
+    const [user] = await unwrap(
+      this.api.GET('/api/users', {
+        params: { query: {} },
+        // Logto reads `search.<field>` / `mode.<field>`, not the documented deepObject.
+        querySerializer: () =>
+          new URLSearchParams({
+            'search.primaryEmail': email,
+            'mode.primaryEmail': 'exact',
+          }).toString(),
+      }),
+    );
+    return user ?? null;
+  }
+
   findUsers = (page: number, pageSize: number) =>
     unwrap(
       this.api.GET('/api/users', {

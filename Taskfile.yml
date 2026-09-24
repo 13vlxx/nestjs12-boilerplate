@@ -36,6 +36,11 @@ tasks:
     cmds:
       - pnpm seed
 
+  jwt:
+    desc: Print an access token for a Logto user (task jwt -- admin@example.com)
+    cmds:
+      - pnpm -s jwt {{.CLI_ARGS}}
+
   build:
     desc: Build the application
     cmds:

@@ -11,10 +11,12 @@ import type {
 } from '../_utils/config/env.config.js';
 import { NodeEnvEnum } from '../_utils/config/types/node-env.type.js';
 import { LOGTO_MANAGEMENT_API } from '../logto/logto.constants.js';
+import { LogtoService } from '../logto/logto.service.js';
 import { unwrap } from '../logto/_utils/logto-response.utils.js';
 import type { LogtoManagementApi } from '../logto/_utils/types/logto.type.js';
 import {
   ACCESS_TOKEN_CLAIMS_SCRIPT,
+  DEV_TOKEN_APP_NAME,
   SEED_API_RESOURCE_NAME,
   seedRoles,
   seedUsers,
@@ -23,7 +25,7 @@ import {
 /**
  * Drops the MongoDB database and recreates its indexes, then makes sure Logto
  * holds the API resource, the access-token claims script (`roles` claim), the
- * roles and the users of seed.data.ts. The Logto part is idempotent and never
+ * roles, the users of seed.data.ts and the app used by `pnpm jwt`. The Logto part is idempotent and never
  * deletes anything.
  * Refuses to run in production.
  *
@@ -52,6 +54,7 @@ async function seed() {
     );
 
     const api = app.get<LogtoManagementApi>(LOGTO_MANAGEMENT_API);
+    const logtoService = app.get(LogtoService);
     const indicator = config.get<LogtoConfig>('LOGTO').API_RESOURCE;
 
     await ensureApiResource(api, indicator);
@@ -69,9 +72,12 @@ async function seed() {
     logger.log(`Roles: ${[...roleIds.keys()].join(', ')}`);
 
     for (const user of seedUsers) {
-      await ensureUser(api, user, roleIds);
+      await ensureUser(api, logtoService, user, roleIds);
       logger.log(`User ${user.email} (${user.roles.join(', ') || 'no role'})`);
     }
+
+    await ensureDevTokenApp(api);
+    logger.log(`Application "${DEV_TOKEN_APP_NAME}" (pnpm jwt)`);
 
     logger.log('Seed complete');
   } finally {
@@ -131,22 +137,12 @@ async function ensureRoles(
 
 async function ensureUser(
   api: LogtoManagementApi,
+  logtoService: LogtoService,
   { email, name, password, roles }: (typeof seedUsers)[number],
   roleIds: Map<string, string>,
 ): Promise<void> {
-  const [found] = await unwrap(
-    api.GET('/api/users', {
-      params: { query: {} },
-      // Logto reads `search.<field>` / `mode.<field>`, not the documented deepObject.
-      querySerializer: () =>
-        new URLSearchParams({
-          'search.primaryEmail': email,
-          'mode.primaryEmail': 'exact',
-        }).toString(),
-    }),
-  );
   const user =
-    found ??
+    (await logtoService.findUserByEmailOrNull(email)) ??
     (await unwrap(
       api.POST('/api/users', { body: { primaryEmail: email, name, password } }),
     ));
@@ -166,6 +162,34 @@ async function ensureUser(
         body: { roleIds: missing },
       }),
     );
+}
+
+async function ensureDevTokenApp(api: LogtoManagementApi): Promise<void> {
+  const apps = await unwrap(
+    api.GET('/api/applications', {
+      params: { query: { types: 'Traditional', page_size: 100 } },
+    }),
+  );
+  if (apps.some((app) => app.name === DEV_TOKEN_APP_NAME)) return;
+
+  await unwrap(
+    api.POST('/api/applications', {
+      body: {
+        name: DEV_TOKEN_APP_NAME,
+        type: 'Traditional',
+        oidcClientMetadata: {
+          // Never used by the token exchange, but Logto requires one. The
+          // generated type wrongly expects objects: the API takes URL strings.
+          redirectUris: ['http://localhost/unused'] as unknown as Record<
+            string,
+            unknown
+          >[],
+          postLogoutRedirectUris: [],
+        },
+        customClientMetadata: { allowTokenExchange: true },
+      },
+    }),
+  );
 }
 
 await seed();

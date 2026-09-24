@@ -18,15 +18,15 @@ docker compose up -d --wait   # MongoDB :27018, Logto :3001/:3002, Maildev :1025
 pnpm start:dev                # http://localhost:3000/api/v1, Swagger at /api/doc, Scalar at /api/doc-scalar
 pnpm build && pnpm lint && pnpm format   # must all pass before you are done
 pnpm seed                     # DROPS MongoDB; creates missing API resource/roles/users + roles JWT script in Logto
+pnpm -s jwt admin@example.com # prints a user access token (token exchange via the seeded dev app)
 ```
 
 There are no automated tests in this repo (by choice). Verify changes by
 building, then exercising the routes with curl or Swagger against the Docker
 services. Use a throwaway `DATABASE_NAME` / `S3_BUCKET` when scripting and
-clean up after yourself. For a user access token without a browser, use
-Logto's token exchange (`POST /api/subject-tokens` then `grant_type=
-urn:ietf:params:oauth:grant-type:token-exchange` with `resource` = the API)
-on a throwaway Logto (`docker compose -p <tmp> …`), never the shared one.
+clean up after yourself. Get user tokens with `pnpm -s jwt <email>`
+(`src/seed/jwt.ts`); when scripting against Logto itself, use a throwaway
+Logto (`docker compose -p <tmp> …` on other ports), never the shared one.
 
 ## Module layout
 

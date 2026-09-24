@@ -68,6 +68,7 @@ Seeded Logto accounts:
 | `pnpm build`      | Compile to `dist/`                                                 |
 | `pnpm start:prod` | Run the compiled app                                               |
 | `pnpm seed`       | **Drop MongoDB**, then create what is missing in Logto (idempotent) |
+| `pnpm -s jwt <email>` | Print an access token for that Logto user (dev only)           |
 | `pnpm lint`       | oxlint (type-aware)                                                |
 | `pnpm format`     | Prettier                                                           |
 
@@ -210,6 +211,21 @@ requirement, `@Protect()` adds the `401` response and `@Protect(roles…)` the
 title — `(ALL)` or `(ADMIN)` — so it reads from the collapsed list. Keep
 `@ApiOperation` **below** `@Protect`: decorators apply bottom-up, and an
 `@ApiOperation` above would overwrite the label.
+
+### Getting a token
+
+```bash
+pnpm -s jwt admin@example.com          # prints the JWT (roles: admin, user)
+pnpm -s jwt john.doe@example.com       # roles: user
+```
+
+Paste it in Swagger (**Authorize**) or send it as `Authorization: Bearer …`.
+No browser involved: the M2M app asks Logto for a *subject token* for that
+user, and the *NestJS Boilerplate - dev tokens* app (created by `pnpm seed`)
+exchanges it for an access token for `LOGTO_API_RESOURCE` (token exchange,
+RFC 8693). It is the same token the front-end would get — same roles, same
+audience — valid one hour. The script refuses to run in production; don't
+create that app in a production tenant.
 
 ### Users & custom data
 
