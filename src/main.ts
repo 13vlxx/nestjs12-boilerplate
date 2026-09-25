@@ -47,7 +47,7 @@ async function bootstrap() {
     app.use(
       '/api/doc-scalar',
       apiReference({
-        content: document,
+        url: '/api/doc/json',
         theme: 'purple',
       }),
     );

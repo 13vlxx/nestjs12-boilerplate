@@ -116,10 +116,13 @@ regular methods when there is a body.
   verification, password reset) go through `token.utils.ts` and
   `ActionToken { hash, expiresAt }`. Never bcrypt a token — bcrypt truncates
   at 72 bytes; bcrypt is for passwords only, via `EncryptionService`.
-- Every route has `@ApiOperation({ summary })`. `@Public()` / `@Protect()` /
-  `@RefreshTokenProtected()` document access themselves (no bearer / `401` /
-  `403` with the roles); don't hand-write those responses and don't
-  post-process the OpenAPI document (only `cleanupOpenApiDoc`).
+- Every route has `@ApiOperation({ summary })`, placed **below** `@Protect`:
+  `@Protect` appends `(ALL)` / `(ADMIN)` to that summary when it runs, and
+  decorators apply bottom-up. Don't write the label by hand.
+- `@Public()` / `@Protect()` / `@RefreshTokenProtected()` document access
+  themselves (no bearer / `401` / `403` with the roles); don't hand-write
+  those responses and don't post-process the OpenAPI document (only
+  `cleanupOpenApiDoc`).
 
 ## Files
 
