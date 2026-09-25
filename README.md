@@ -18,7 +18,7 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 | Files             | S3-compatible storage (RustFS locally), multipart upload, presigned reads|
 | Rate limiting     | `@nestjs/throttler`                                                    |
 | Health            | `@nestjs/terminus` (MongoDB ping)                                      |
-| Docs              | Swagger UI at `/api/doc` (disabled in production)                      |
+| Docs              | Swagger UI at `/api/doc`, Scalar at `/api/doc-scalar` (not in production) |
 | Tooling           | oxlint, Prettier, Taskfile                                             |
 
 ## Getting started
@@ -27,7 +27,7 @@ basics (rate limiting, CORS, health check, graceful shutdown) already wired.
 pnpm install
 docker compose up -d --wait   # MongoDB, Maildev, RustFS (see below)
 pnpm seed                     # drops the DB and inserts the users from src/seed/seed.data.ts
-pnpm start:dev                # http://localhost:3000/api/v1 — Swagger at /api/doc
+pnpm start:dev                # http://localhost:3000/api/v1 — Swagger at /api/doc, Scalar at /api/doc-scalar
 ```
 
 ### Local services (`docker-compose.yml`)
@@ -203,7 +203,8 @@ JSX, add a `sendXxx` method on `EmailsService`.
 ```ts
 @Controller('users')
 export class UsersController {
-  @Get('me')                           // any authenticated user
+  @Get('me')
+  @Protect()                           // any authenticated user
   getMe(@ConnectedUser() user: UserDocument) { … }
 
   @Get()
@@ -216,9 +217,12 @@ export class UsersController {
 }
 ```
 
-Swagger summaries are prefixed automatically with who can call the route:
-nothing for public routes, `(ALL)` for authenticated, `(ADMIN)` / `(ADMIN, USER)`
-when restricted.
+Access is documented by the decorators themselves, in standard OpenAPI that
+Swagger and Scalar render natively: `@Public()` removes the bearer
+requirement, `@Protect()` adds the `401` response and `@Protect(roles…)` the
+`403` with the required roles. Each route names itself with
+`@ApiOperation({ summary })`. These are separate metadata, so decorator order
+does not matter.
 
 ### Password hashing
 

@@ -1,5 +1,5 @@
 import { applyDecorators, SetMetadata, UseGuards } from '@nestjs/common';
-import { ApiOperation } from '@nestjs/swagger';
+import { ApiUnauthorizedResponse } from '@nestjs/swagger';
 import { IS_PUBLIC_KEY } from './public.decorator.js';
 import { JwtRefreshGuard } from '../../guards/jwt-refresh.guard.js';
 
@@ -11,5 +11,7 @@ export const RefreshTokenProtected = () =>
   applyDecorators(
     SetMetadata(IS_PUBLIC_KEY, true),
     UseGuards(JwtRefreshGuard),
-    ApiOperation({ summary: '(REFRESH TOKEN as Bearer)' }),
+    ApiUnauthorizedResponse({
+      description: 'Missing, invalid or already rotated refresh token',
+    }),
   );

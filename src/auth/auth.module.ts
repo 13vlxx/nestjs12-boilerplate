@@ -1,6 +1,6 @@
 import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { APP_GUARD, DiscoveryModule } from '@nestjs/core';
+import { APP_GUARD } from '@nestjs/core';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import type {
@@ -38,7 +38,6 @@ import { EmailsModule } from '../emails/emails.module.js';
     UsersModule,
     EncryptionModule,
     EmailsModule,
-    DiscoveryModule,
   ],
   controllers: [AuthController],
   providers: [

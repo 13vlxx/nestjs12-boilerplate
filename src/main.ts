@@ -3,7 +3,6 @@ import { Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { cleanupOpenApiDoc } from 'nestjs-zod';
-import { annotateSwaggerWithAccess } from './auth/_utils/swagger/annotate-access.js';
 import { AppModule } from './app.module.js';
 import { MongoDBExceptionFilter } from './_utils/filters/mongo-exception.filter.js';
 import swaggerCustomOptions from './_utils/config/swagger-custom-options.config.js';
@@ -12,6 +11,7 @@ import type {
   ServerConfig,
 } from './_utils/config/env.config.js';
 import { NodeEnvEnum } from './_utils/config/types/node-env.type.js';
+import { apiReference } from '@scalar/nestjs-api-reference';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -39,20 +39,23 @@ async function bootstrap() {
       .addBearerAuth()
       .addSecurityRequirements('bearer')
       .build();
-    const document = annotateSwaggerWithAccess(
-      app,
+    const document = cleanupOpenApiDoc(
       SwaggerModule.createDocument(app, config),
     );
-    SwaggerModule.setup(
-      'api/doc',
-      app,
-      cleanupOpenApiDoc(document),
-      swaggerCustomOptions,
+    SwaggerModule.setup('api/doc', app, document, swaggerCustomOptions);
+
+    app.use(
+      '/api/doc-scalar',
+      apiReference({
+        content: document,
+        theme: 'purple',
+      }),
     );
   }
 
   await app.listen(port);
   logger.log(`Listening at http://localhost:${port}/api/v1`);
   logger.log(`Swagger UI available at http://localhost:${port}/api/doc`);
+  logger.log(`Scalar available at http://localhost:${port}/api/doc-scalar`);
 }
 await bootstrap();

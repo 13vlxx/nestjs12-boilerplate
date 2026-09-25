@@ -15,7 +15,7 @@ React Email · S3 (`@aws-sdk/client-s3`) · `@nestjs/throttler` ·
 
 ```bash
 docker compose up -d --wait   # MongoDB :27017, Maildev :1025/:1080, RustFS :9000/:9001
-pnpm start:dev                # http://localhost:3000/api/v1, Swagger at /api/doc
+pnpm start:dev                # http://localhost:3000/api/v1, Swagger at /api/doc, Scalar at /api/doc-scalar
 pnpm build && pnpm lint && pnpm format   # must all pass before you are done
 pnpm seed                     # DROPS the database, recreates indexes, inserts src/seed/seed.data.ts
 ```
@@ -80,6 +80,11 @@ regular methods when there is a body.
   Export the schema too when it will be composed (`.partial()`, `.extend()`).
 - Request bodies use `z.strictObject` (unknown keys → 400). Add
   `.meta({ example, description })` on fields so Swagger is usable.
+- Nullable fields: put the `.meta()` on the inner schema, **before**
+  `.nullable()` (`z.string().meta({ example }).nullable()`). A bare nullable
+  primitive becomes `type: [T, "null"]`, which `@nestjs/swagger` renders as
+  an array of `T`; with a keyword on the inner schema, Zod emits `anyOf`,
+  which `cleanupOpenApiDoc` turns into `nullable: true`.
 - Path params: a DTO with `objectIdSchema` (`src/_utils/schemas`) and
   `@Param() { id }: XParamsDto` — never a bare `@Param('id') id: string`.
 - Multipart: `@FormDataRequest({ files: [{ name, maxCount }], maxFileSize })`
@@ -100,6 +105,10 @@ regular methods when there is a body.
 - **Every route is protected by default** (`JwtAuthGuard` as `APP_GUARD`).
   `@Public()` opts out; `@Protect(UserRoleEnum.ADMIN, …)` restricts to roles;
   `@RefreshTokenProtected()` authenticates with the refresh token.
+- Every non-public route declares its access explicitly: `@Protect()` (any
+  authenticated user) or `@Protect(UserRoleEnum.X, …)`. Roles on a route
+  replace the controller's; a bare `@Protect()` sets no roles, so it never
+  loosens a controller-level restriction.
 - `@ConnectedUser() user: UserDocument` gives the authenticated user, loaded
   from the DB on every request.
 - Access tokens are short-lived and stateless; refresh tokens are rotated and
@@ -107,8 +116,10 @@ regular methods when there is a body.
   verification, password reset) go through `token.utils.ts` and
   `ActionToken { hash, expiresAt }`. Never bcrypt a token — bcrypt truncates
   at 72 bytes; bcrypt is for passwords only, via `EncryptionService`.
-- Swagger summaries get `(ALL)` / `(ADMIN)` automatically from the same
-  metadata the guard uses (`annotate-access.ts`); don't write them by hand.
+- Every route has `@ApiOperation({ summary })`. `@Public()` / `@Protect()` /
+  `@RefreshTokenProtected()` document access themselves (no bearer / `401` /
+  `403` with the roles); don't hand-write those responses and don't
+  post-process the OpenAPI document (only `cleanupOpenApiDoc`).
 
 ## Files
 

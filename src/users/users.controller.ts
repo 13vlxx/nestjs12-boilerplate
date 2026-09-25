@@ -1,5 +1,5 @@
 import { Body, Controller, Delete, Get, Put } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
+import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import { ZodResponse } from 'nestjs-zod';
 import { UsersService } from './users.service.js';
 import { GetUserDto } from './_utils/dtos/responses/get-user.dto.js';
@@ -17,12 +17,16 @@ export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
   @Get('me')
+  @Protect()
+  @ApiOperation({ summary: 'Get the connected user' })
   @ZodResponse({ type: GetUserDto })
   getMe(@ConnectedUser() user: UserDocument): Promise<GetUserDto> {
     return this.usersService.getMe(user);
   }
 
   @Put('me/profile-picture')
+  @Protect()
+  @ApiOperation({ summary: 'Replace my profile picture' })
   @FormDataRequest({
     files: [{ name: 'file' }],
     maxFileSize: PROFILE_PICTURE_MAX_SIZE,
@@ -36,6 +40,8 @@ export class UsersController {
   }
 
   @Delete('me/profile-picture')
+  @Protect()
+  @ApiOperation({ summary: 'Remove my profile picture' })
   @ZodResponse({ type: GetUserDto })
   removeProfilePicture(
     @ConnectedUser() user: UserDocument,
@@ -45,6 +51,7 @@ export class UsersController {
 
   @Get()
   @Protect(UserRoleEnum.ADMIN)
+  @ApiOperation({ summary: 'List users' })
   @ZodResponse({ type: [GetUserDto] })
   findAll(): Promise<GetUserDto[]> {
     return this.usersService.findAll();
