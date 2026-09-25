@@ -19,7 +19,7 @@ tasks:
   dev:
     desc: Start the application in development mode
     cmds:
-      - nest start --watch
+      - pnpm start:dev
 
   lint:
     desc: Run the linter
