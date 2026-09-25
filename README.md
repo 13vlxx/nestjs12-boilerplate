@@ -205,10 +205,12 @@ JSX, add a `sendXxx` method on `EmailsService`.
 export class UsersController {
   @Get('me')
   @Protect()                           // any authenticated user
+  @ApiOperation({ summary: 'Get the connected user' }) // → "Get the connected user (ALL)"
   getMe(@ConnectedUser() user: UserDocument) { … }
 
   @Get()
   @Protect(UserRoleEnum.ADMIN)          // admins only
+  @ApiOperation({ summary: 'List users' })             // → "List users (ADMIN)"
   findAll() { … }
 
   @Public()
@@ -221,8 +223,10 @@ Access is documented by the decorators themselves, in standard OpenAPI that
 Swagger and Scalar render natively: `@Public()` removes the bearer
 requirement, `@Protect()` adds the `401` response and `@Protect(roles…)` the
 `403` with the required roles. Each route names itself with
-`@ApiOperation({ summary })`. These are separate metadata, so decorator order
-does not matter.
+`@ApiOperation({ summary })`, and `@Protect()` appends the access to that
+title — `(ALL)` or `(ADMIN)` — so it reads from the collapsed list. Keep
+`@ApiOperation` **below** `@Protect`: decorators apply bottom-up, and an
+`@ApiOperation` above would overwrite the label.
 
 ### Password hashing
 
